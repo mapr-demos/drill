@@ -17,26 +17,96 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
+import com.google.common.collect.ImmutableList;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.schema.SchemaPlus;
+import org.apache.calcite.schema.Table;
+import org.apache.drill.exec.planner.logical.CreateTableEntry;
+import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.SchemaConfig;
 import org.apache.drill.exec.store.SchemaFactory;
 
 import java.io.IOException;
+import java.util.Collections;
+import java.util.List;
+import java.util.Set;
 
 @Slf4j
 public class OpenTSDBSchemaFactory implements SchemaFactory {
 
-    final private String name;
+    final private String schemaName;
     private OpenTSDBStoragePlugin plugin;
 
-    public OpenTSDBSchemaFactory(OpenTSDBStoragePlugin plugin, String name) {
+    public OpenTSDBSchemaFactory(OpenTSDBStoragePlugin plugin, String schemaName) {
         this.plugin = plugin;
-        this.name = name;
+        this.schemaName = schemaName;
     }
 
     @Override
-    public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus schemaPlus) throws IOException {
-        log.info("OpenTSDBSchemaFactory.registerSchemas()");
+    public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
+        OpenTSDBTables schema = new OpenTSDBTables(schemaName);
+        SchemaPlus hPlus = parent.add(schemaName, schema);
+        schema.setHolder(hPlus);
+    }
+
+
+    class OpenTSDBTables extends AbstractSchema {
+
+        public OpenTSDBTables(String name) {
+            super(ImmutableList.<String>of(), name);
+        }
+
+        public void setHolder(SchemaPlus plusOfThis) {}
+
+        @Override
+        public AbstractSchema getSubSchema(String name) {
+            return null;
+        }
+
+        @Override
+        public Set<String> getSubSchemaNames() {
+            return Collections.emptySet();
+        }
+
+        @Override
+        public Table getTable(String name) {
+            OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
+            try {
+                Schema schema = plugin.getClient().getSchema(name);
+                return new DrillOpenTSDBTable(schemaName, plugin, schema, scanSpec);
+            } catch (Exception e) {
+                logger.warn("Failure while retrieving openTSDB table {}", name, e);
+                return null;
+            }
+        }
+
+        @Override
+        public Set<String> getTableNames() {
+            try {
+                return plugin.getClient().getAllTables();
+            } catch (Exception e) {
+                logger.warn("Failure reading openTSDB tables.", e);
+                return Collections.emptySet();
+            }
+        }
+
+        @Override
+        public CreateTableEntry createNewTable(final String tableName, List<String> partitionColumns) {
+            return null;
+        }
+
+        @Override
+        public void dropTable(String tableName) {}
+
+        @Override
+        public boolean isMutable() {
+            return true;
+        }
+
+        @Override
+        public String getTypeName() {
+            return OpenTSDBStoragePluginConfig.NAME;
+        }
+
     }
 }

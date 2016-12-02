@@ -21,50 +21,39 @@ import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
+import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.drill.exec.planner.logical.DynamicDrillTable;
-import org.apache.drill.exec.store.ischema.Records;
+import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 
 import java.util.List;
-
-enum Type {
-    BINARY,
-    BOOL,
-    DOUBLE,
-    FLOAT,
-    INT16,
-    INT32,
-    INT64,
-    INT8,
-    STRING,
-    TIMESTAMP
-}
 
 @Slf4j
 public class DrillOpenTSDBTable extends DynamicDrillTable {
 
-    private final Records.Schema schema;
+    private final Schema schema;
 
-    public DrillOpenTSDBTable(String storageEngineName, OpenTSDBStoragePlugin plugin, Records.Schema schema, OpenTSDBScanSpec scanSpec) {
+    public DrillOpenTSDBTable(String storageEngineName, OpenTSDBStoragePlugin plugin, Schema schema, OpenTSDBScanSpec scanSpec) {
         super(plugin, storageEngineName, scanSpec);
         this.schema = schema;
     }
 
     @Override
-    public RelDataType getRowType(RelDataTypeFactory typeFactory) {
+    public RelDataType getRowType(final RelDataTypeFactory typeFactory) {
 
         List<String> names = Lists.newArrayList();
         List<RelDataType> types = Lists.newArrayList();
-//        for (ColumnSchema column : schema.getColumns()) {
-//            names.add(column.getName());
-//            RelDataType type = getSqlTypeFromKuduType(typeFactory, column.getType());
-//            type = typeFactory.createTypeWithNullability(type, column.isNullable());
-//            types.add(type);
-//        }
+
+        for (ColumnDTO column : schema.getColumns()) {
+            names.add(column.getColumnName());
+            RelDataType type = getSqlTypeFromOpenTSDBType(typeFactory, column.getColumnType());
+            type = typeFactory.createTypeWithNullability(type, column.isNullable());
+            types.add(type);
+        }
 
         return typeFactory.createStructType(types, names);
     }
 
-    private RelDataType getSqlTypeFromKuduType(RelDataTypeFactory typeFactory, Type type) {
+    private RelDataType getSqlTypeFromOpenTSDBType(RelDataTypeFactory typeFactory, OpenTSDBTypes type) {
         switch (type) {
             case BINARY:
             case BOOL:
@@ -73,9 +62,12 @@ public class DrillOpenTSDBTable extends DynamicDrillTable {
             case INT16:
             case INT32:
             case INT64:
+                return typeFactory.createSqlType(SqlTypeName.INTEGER);
             case INT8:
             case STRING:
+                return typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE);
             case TIMESTAMP:
+                return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
             default:
                 throw new UnsupportedOperationException("Unsupported type.");
         }

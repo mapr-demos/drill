@@ -17,6 +17,10 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
+import com.fasterxml.jackson.annotation.JacksonInject;
+import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
+import com.fasterxml.jackson.annotation.JsonTypeName;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -27,10 +31,6 @@ import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.base.SubScan;
 import org.apache.drill.exec.proto.CoordinationProtos;
 import org.apache.drill.exec.store.StoragePluginRegistry;
-import com.fasterxml.jackson.annotation.JacksonInject;
-import com.fasterxml.jackson.annotation.JsonCreator;
-import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonTypeName;
 
 import java.io.IOException;
 import java.util.List;
@@ -65,6 +65,7 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
     /**
      * Private constructor, used for cloning.
+     *
      * @param that The OpenTSDBGroupScan to clone
      */
     public OpenTSDBGroupScan(OpenTSDBGroupScan that) {

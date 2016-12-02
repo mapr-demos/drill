@@ -17,7 +17,51 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
+import lombok.extern.slf4j.Slf4j;
+import org.apache.http.HttpException;
+import org.apache.http.client.methods.CloseableHttpResponse;
+
+import java.io.BufferedReader;
+import java.io.IOException;
+import java.io.InputStreamReader;
+import java.util.Set;
+
+import static org.apache.drill.exec.store.openTSDB.Util.TABLES_NAME_QUERY;
+import static org.apache.drill.exec.store.openTSDB.Util.performGETRequestToDB;
+
+@Slf4j
 public class OpenTSDBClient {
+
+    private String connection = "http://";
+
+    public OpenTSDBClient(String connection) throws IOException {
+        this.connection += connection;
+    }
+
+    // TODO: Implement getting table schema!!!!
+    public Schema getSchema(String tableName) {
+        return new Schema(tableName);
+    }
+
+    public Set<String> getAllTables() throws IOException, HttpException {
+        return getTablesFromDatabase();
+    }
+
+    private Set<String> getTablesFromDatabase() throws IOException, HttpException {
+        CloseableHttpResponse responseFromDB = performGETRequestToDB(connection, TABLES_NAME_QUERY);
+        return Util.parseJsonArrayToSet(readResponse(responseFromDB));
+    }
+
+    private String readResponse(CloseableHttpResponse response) throws IOException {
+        BufferedReader reader = new BufferedReader(
+                new InputStreamReader(response.getEntity().getContent()));
+        StringBuilder result = new StringBuilder();
+        String line;
+        while ((line = reader.readLine()) != null) {
+            result.append(line);
+        }
+        return result.toString();
+    }
 
     public final void close() {
     }

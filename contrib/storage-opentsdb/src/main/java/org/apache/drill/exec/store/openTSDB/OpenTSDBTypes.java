@@ -15,28 +15,17 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.store.openTSDB.json;
+package org.apache.drill.exec.store.openTSDB;
 
-import lombok.extern.slf4j.Slf4j;
-import org.apache.drill.common.exceptions.ExecutionSetupException;
-import org.apache.drill.exec.ops.OperatorContext;
-import org.apache.drill.exec.physical.impl.OutputMutator;
-import org.apache.drill.exec.store.AbstractRecordReader;
-
-@Slf4j
-public class OpenTSDBJsonRecordReader extends AbstractRecordReader {
-    @Override
-    public void setup(OperatorContext operatorContext, OutputMutator outputMutator) throws ExecutionSetupException {
-
-    }
-
-    @Override
-    public int next() {
-        return 0;
-    }
-
-    @Override
-    public void close() throws Exception {
-
-    }
+public enum OpenTSDBTypes {
+    BINARY,
+    BOOL,
+    DOUBLE,
+    FLOAT,
+    INT16,
+    INT32,
+    INT64,
+    INT8,
+    STRING,
+    TIMESTAMP
 }
