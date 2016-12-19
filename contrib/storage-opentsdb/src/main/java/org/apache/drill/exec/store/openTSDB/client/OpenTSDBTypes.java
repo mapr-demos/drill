@@ -15,22 +15,8 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.store.openTSDB.dto;
+package org.apache.drill.exec.store.openTSDB.client;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
-
-@AllArgsConstructor
-public class ColumnDTO {
-
-    @Getter
-    private final String columnName;
-
-    @Getter
-    private final OpenTSDBTypes columnType;
-
-    public boolean isNullable() {
-        return true;
-    }
+public enum OpenTSDBTypes {
+    STRING
 }

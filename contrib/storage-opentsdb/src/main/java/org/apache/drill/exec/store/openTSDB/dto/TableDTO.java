@@ -15,17 +15,22 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.store.openTSDB;
+package org.apache.drill.exec.store.openTSDB.dto;
 
-public enum OpenTSDBTypes {
-    BINARY,
-    BOOL,
-    DOUBLE,
-    FLOAT,
-    INT16,
-    INT32,
-    INT64,
-    INT8,
-    STRING,
-    TIMESTAMP
+import lombok.AllArgsConstructor;
+import lombok.Data;
+import lombok.NoArgsConstructor;
+
+import java.util.List;
+import java.util.Map;
+
+@Data
+@NoArgsConstructor
+@AllArgsConstructor
+public class TableDTO {
+
+    private String metric;
+    private Map<String, String> tags;
+    private List<String> aggregateTags;
+    private Map<String, String> dps;
 }

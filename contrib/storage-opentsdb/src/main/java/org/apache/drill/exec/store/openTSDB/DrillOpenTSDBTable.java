@@ -23,8 +23,11 @@ import org.apache.calcite.rel.type.RelDataType;
 import org.apache.calcite.rel.type.RelDataTypeFactory;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.drill.exec.planner.logical.DynamicDrillTable;
+import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
+import org.apache.drill.exec.store.openTSDB.client.Schema;
 import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 
+import java.io.IOException;
 import java.util.List;
 
 @Slf4j
@@ -43,31 +46,28 @@ public class DrillOpenTSDBTable extends DynamicDrillTable {
         List<String> names = Lists.newArrayList();
         List<RelDataType> types = Lists.newArrayList();
 
-        for (ColumnDTO column : schema.getColumns()) {
-            names.add(column.getColumnName());
-            RelDataType type = getSqlTypeFromOpenTSDBType(typeFactory, column.getColumnType());
-            type = typeFactory.createTypeWithNullability(type, column.isNullable());
-            types.add(type);
+        try {
+            convertToRelDataType(typeFactory, names, types);
+        } catch (IOException e) {
+            e.printStackTrace();
         }
 
         return typeFactory.createStructType(types, names);
     }
 
+    private void convertToRelDataType(RelDataTypeFactory typeFactory, List<String> names, List<RelDataType> types) throws IOException {
+            for (ColumnDTO column : schema.getColumns()) {
+                names.add(column.getColumnName());
+                RelDataType type = getSqlTypeFromOpenTSDBType(typeFactory, column.getColumnType());
+                type = typeFactory.createTypeWithNullability(type, column.isNullable());
+                types.add(type);
+            }
+    }
+
     private RelDataType getSqlTypeFromOpenTSDBType(RelDataTypeFactory typeFactory, OpenTSDBTypes type) {
         switch (type) {
-            case BINARY:
-            case BOOL:
-            case DOUBLE:
-            case FLOAT:
-            case INT16:
-            case INT32:
-            case INT64:
-                return typeFactory.createSqlType(SqlTypeName.INTEGER);
-            case INT8:
             case STRING:
                 return typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE);
-            case TIMESTAMP:
-                return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
             default:
                 throw new UnsupportedOperationException("Unsupported type.");
         }

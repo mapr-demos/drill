@@ -15,22 +15,30 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.store.openTSDB.dto;
+package org.apache.drill.exec.store.openTSDB.client;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
+import lombok.extern.slf4j.Slf4j;
+import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 
-@AllArgsConstructor
-public class ColumnDTO {
+import java.io.IOException;
+import java.util.HashSet;
+import java.util.Set;
 
-    @Getter
-    private final String columnName;
+// TODO: Refactor this class
+@Slf4j
+public class Schema {
 
-    @Getter
-    private final OpenTSDBTypes columnType;
+    private final Set<ColumnDTO> columns = new HashSet<>();
 
-    public boolean isNullable() {
-        return true;
+    public Schema() {
+        columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
+        columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
+        columns.add(new ColumnDTO("dps", OpenTSDBTypes.STRING));
+        columns.add(new ColumnDTO("tags", OpenTSDBTypes.STRING));
+    }
+
+    // TODO: refactor this
+    public Set<ColumnDTO> getColumns() throws IOException {
+        return columns;
     }
 }

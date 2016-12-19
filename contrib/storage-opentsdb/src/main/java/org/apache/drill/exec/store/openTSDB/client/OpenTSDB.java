@@ -15,22 +15,21 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
  */
-package org.apache.drill.exec.store.openTSDB.dto;
+package org.apache.drill.exec.store.openTSDB.client;
 
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
+import org.apache.drill.exec.store.openTSDB.dto.TableDTO;
+import retrofit2.Call;
+import retrofit2.http.GET;
+import retrofit2.http.Query;
 
-@AllArgsConstructor
-public class ColumnDTO {
+import java.util.List;
+import java.util.Set;
 
-    @Getter
-    private final String columnName;
+public interface OpenTSDB {
 
-    @Getter
-    private final OpenTSDBTypes columnType;
+    @GET("api/suggest?type=metrics&max=100")
+    Call<Set<String>> getAllTablesName();
 
-    public boolean isNullable() {
-        return true;
-    }
+    @GET("api/query")
+    Call<List<TableDTO>> getTable(@Query("start") String time, @Query("m") String tableName);
 }

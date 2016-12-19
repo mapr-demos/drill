@@ -18,36 +18,42 @@
 package org.apache.drill.exec.store.openTSDB;
 
 import lombok.extern.slf4j.Slf4j;
-import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
+import org.apache.drill.exec.record.VectorAccessible;
+import org.apache.drill.exec.store.AbstractRecordWriter;
 
-import java.util.ArrayList;
-import java.util.List;
+import java.io.IOException;
+import java.util.Map;
 
 @Slf4j
-public class Schema {
+public class OpenTSDBRecordWriter extends AbstractRecordWriter {
 
-    private final List<ColumnDTO> columns = new ArrayList<>();
-    private String tableName;
+    @Override
+    public void init(Map<String, String> writerOptions) throws IOException {
 
-    public Schema(String name) {
-        this.tableName = name;
-        columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.TIMESTAMP));
-        columns.add(new ColumnDTO("value", OpenTSDBTypes.INT64));
-        columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
     }
 
-    // TODO: Implement API call
-    public List<String> getTableColumnNames() {
-        List<String> columns = new ArrayList<>();
-        for (ColumnDTO column : this.columns) {
-            columns.add(column.getColumnName());
-        }
-        return columns;
+    @Override
+    public void updateSchema(VectorAccessible batch) throws IOException {
+
     }
 
-    // TODO: Implement API call
-    public List<ColumnDTO> getColumns() {
-        return columns;
+    @Override
+    public void startRecord() throws IOException {
+
     }
 
+    @Override
+    public void endRecord() throws IOException {
+
+    }
+
+    @Override
+    public void abort() throws IOException {
+
+    }
+
+    @Override
+    public void cleanup() throws IOException {
+
+    }
 }

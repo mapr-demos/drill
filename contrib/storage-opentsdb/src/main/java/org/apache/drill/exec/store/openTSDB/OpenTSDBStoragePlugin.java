@@ -17,14 +17,18 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
-import lombok.extern.slf4j.Slf4j;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.JSONOptions;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.AbstractStoragePlugin;
 import org.apache.drill.exec.store.SchemaConfig;
+import org.apache.drill.exec.store.openTSDB.client.OpenTSDB;
+import org.apache.drill.exec.store.openTSDB.schema.OpenTSDBSchemaFactory;
+import retrofit2.Retrofit;
+import retrofit2.converter.jackson.JacksonConverterFactory;
 
 import java.io.IOException;
 
@@ -37,27 +41,31 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
 
     @SuppressWarnings("unused")
     private final String name;
-    private final OpenTSDBClient client;
+    private final OpenTSDB client;
 
     public OpenTSDBStoragePlugin(OpenTSDBStoragePluginConfig configuration, DrillbitContext context, String name) throws IOException {
         this.context = context;
         this.schemaFactory = new OpenTSDBSchemaFactory(this, name);
         this.engineConfig = configuration;
         this.name = name;
-        this.client = new OpenTSDBClient(configuration.getConnection());
+        this.client = new Retrofit.Builder()
+                .baseUrl("http://" + configuration.getConnection())
+                .addConverterFactory(JacksonConverterFactory.create())
+                .build()
+                .create(OpenTSDB.class);
     }
 
     @Override
     public void start() throws IOException {
     }
 
-    public OpenTSDBClient getClient() {
+    public OpenTSDB getClient() {
         return client;
     }
 
     @Override
     public void close() throws Exception {
-        client.close();
+//        client.close();
     }
 
     public DrillbitContext getContext() {
@@ -73,7 +81,7 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
     public OpenTSDBGroupScan getPhysicalScan(String userName, JSONOptions selection) throws IOException {
         OpenTSDBScanSpec scanSpec = selection.getListWith(new ObjectMapper(), new TypeReference<OpenTSDBScanSpec>() {
         });
-        return new OpenTSDBGroupScan(userName);
+        return new OpenTSDBGroupScan(this, scanSpec, null);
     }
 
     @Override
