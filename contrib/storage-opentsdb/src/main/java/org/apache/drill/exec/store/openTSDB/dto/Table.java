@@ -27,10 +27,11 @@ import java.util.Map;
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
-public class TableDTO {
+public class Table {
 
-    private String metric;
-    private Map<String, String> tags;
-    private List<String> aggregateTags;
-    private Map<String, String> dps;
+    public String metric;
+    public Map<String, String> tags;
+    public List<String> aggregateTags;
+    public Map<String, String> dps;
+
 }

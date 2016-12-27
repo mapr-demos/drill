@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.store.openTSDB.client;
 
-import org.apache.drill.exec.store.openTSDB.dto.TableDTO;
+import org.apache.drill.exec.store.openTSDB.dto.Table;
 import retrofit2.Call;
 import retrofit2.http.GET;
 import retrofit2.http.Query;
@@ -31,5 +31,5 @@ public interface OpenTSDB {
     Call<Set<String>> getAllTablesName();
 
     @GET("api/query")
-    Call<List<TableDTO>> getTable(@Query("start") String time, @Query("m") String tableName);
+    Call<List<Table>> getTable(@Query("start") String time, @Query("m") String tableName);
 }

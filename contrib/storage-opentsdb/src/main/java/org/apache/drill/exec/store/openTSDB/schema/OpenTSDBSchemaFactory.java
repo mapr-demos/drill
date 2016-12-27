@@ -130,7 +130,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
             return OpenTSDBStoragePluginConfig.NAME;
         }
 
-        DrillTable getDrillTable(String dbName, String collectionName) {
+        DrillTable getDrillTable(String collectionName) {
             OpenTSDBScanSpec openTSDBScanSpec = new OpenTSDBScanSpec(collectionName);
             return new DynamicDrillTable(plugin, schemaName, null, openTSDBScanSpec);
         }

@@ -118,28 +118,14 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
     public static class OpenTSDBSubScanSpec {
 
         private final String tableName;
-        private final byte[] startKey;
-        private final byte[] endKey;
 
         @JsonCreator
-        public OpenTSDBSubScanSpec(@JsonProperty("tableName") String tableName,
-                                   @JsonProperty("startKey") byte[] startKey,
-                                   @JsonProperty("endKey") byte[] endKey) {
+        public OpenTSDBSubScanSpec(@JsonProperty("tableName") String tableName) {
             this.tableName = tableName;
-            this.startKey = startKey;
-            this.endKey = endKey;
         }
 
         public String getTableName() {
             return tableName;
-        }
-
-        public byte[] getStartKey() {
-            return startKey;
-        }
-
-        public byte[] getEndKey() {
-            return endKey;
         }
 
     }

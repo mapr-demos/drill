@@ -45,7 +45,6 @@ import org.apache.drill.exec.store.schedule.EndpointByteMap;
 import org.apache.drill.exec.store.schedule.EndpointByteMapImpl;
 
 import java.io.IOException;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
@@ -83,39 +82,23 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
     }
 
     private void init() {
-        String tableName = openTSDBScanSpec.getTableName();
-        Collection<DrillbitEndpoint> endpoints = storagePlugin.getContext().getBits();
         Map<String, DrillbitEndpoint> endpointMap = Maps.newHashMap();
-        OpenTSDBWork work = new OpenTSDBWork(new byte[0], new byte[0]);
-        for (DrillbitEndpoint endpoint : endpoints) {
+        OpenTSDBWork work = new OpenTSDBWork();
+        for (DrillbitEndpoint endpoint : storagePlugin.getContext().getBits()) {
             endpointMap.put(endpoint.getAddress(), endpoint);
+
+
             DrillbitEndpoint ep = endpointMap.get(endpoint.getAddress());
             if (ep != null) {
                 work.getByteMap().add(ep, DEFAULT_TABLET_SIZE);
             }
-            endpoint.getAddress();
+            openTSDBWorkList.add(work);
         }
     }
 
     private static class OpenTSDBWork implements CompleteWork {
 
         private EndpointByteMapImpl byteMap = new EndpointByteMapImpl();
-
-        private byte[] partitionKeyStart;
-        private byte[] partitionKeyEnd;
-
-        public OpenTSDBWork(byte[] partitionKeyStart, byte[] partitionKeyEnd) {
-            this.partitionKeyStart = partitionKeyStart;
-            this.partitionKeyEnd = partitionKeyEnd;
-        }
-
-        public byte[] getPartitionKeyStart() {
-            return partitionKeyStart;
-        }
-
-        public byte[] getPartitionKeyEnd() {
-            return partitionKeyEnd;
-        }
 
         @Override
         public long getTotalBytes() {
@@ -182,8 +165,8 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
         List<OpenTSDBSubScanSpec> scanSpecList = Lists.newArrayList();
 
-        for (OpenTSDBWork work : workList) {
-            scanSpecList.add(new OpenTSDBSubScanSpec(getTableName(), work.getPartitionKeyStart(), work.getPartitionKeyEnd()));
+        for (OpenTSDBWork ignored : workList) {
+            scanSpecList.add(new OpenTSDBSubScanSpec(getTableName()));
         }
 
         return new OpenTSDBSubScan(storagePlugin, storagePluginConfig, scanSpecList, this.columns);

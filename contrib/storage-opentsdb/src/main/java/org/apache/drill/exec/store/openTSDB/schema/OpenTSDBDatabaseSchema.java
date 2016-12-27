@@ -51,7 +51,7 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
         }
 
         if (!drillTables.containsKey(tableName)) {
-            drillTables.put(tableName, schema.getDrillTable(this.name, tableName));
+            drillTables.put(tableName, schema.getDrillTable(tableName));
         }
 
         return drillTables.get(tableName);

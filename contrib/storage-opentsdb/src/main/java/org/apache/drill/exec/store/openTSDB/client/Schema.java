@@ -21,14 +21,14 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 
 import java.io.IOException;
-import java.util.HashSet;
-import java.util.Set;
+import java.util.ArrayList;
+import java.util.List;
 
 // TODO: Refactor this class
 @Slf4j
 public class Schema {
 
-    private final Set<ColumnDTO> columns = new HashSet<>();
+    private final List<ColumnDTO> columns = new ArrayList<>();
 
     public Schema() {
         columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
@@ -38,7 +38,15 @@ public class Schema {
     }
 
     // TODO: refactor this
-    public Set<ColumnDTO> getColumns() throws IOException {
+    public List<ColumnDTO> getColumns() throws IOException {
         return columns;
+    }
+
+    public int getColumnCount() {
+        return columns.size();
+    }
+
+    public ColumnDTO getColumnByIndex(int columnIndex) {
+        return columns.get(columnIndex);
     }
 }

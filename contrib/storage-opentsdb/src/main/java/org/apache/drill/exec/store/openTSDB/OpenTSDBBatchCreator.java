@@ -36,7 +36,7 @@ public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
     public CloseableRecordBatch getBatch(FragmentContext context, OpenTSDBSubScan subScan, List<RecordBatch> children) throws ExecutionSetupException {
         Preconditions.checkArgument(children.isEmpty());
         List<RecordReader> readers = Lists.newArrayList();
-        List<SchemaPath> columns = null;
+        List<SchemaPath> columns;
 
         for (OpenTSDBSubScan.OpenTSDBSubScanSpec scanSpec : subScan.getTabletScanSpecList()) {
             try {
