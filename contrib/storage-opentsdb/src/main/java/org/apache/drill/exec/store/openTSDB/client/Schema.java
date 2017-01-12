@@ -33,7 +33,8 @@ public class Schema {
     public Schema() {
         columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
         columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("dps", OpenTSDBTypes.STRING));
+        columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.STRING));
+        columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.STRING));
         columns.add(new ColumnDTO("tags", OpenTSDBTypes.STRING));
     }
 

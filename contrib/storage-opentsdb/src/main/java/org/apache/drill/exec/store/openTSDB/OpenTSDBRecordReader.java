@@ -21,7 +21,6 @@ import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
 import lombok.extern.slf4j.Slf4j;
-import org.apache.commons.collections.iterators.ArrayIterator;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -47,6 +46,9 @@ import org.apache.drill.exec.vector.ValueVector;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
+import java.text.SimpleDateFormat;
+import java.util.Calendar;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
@@ -70,7 +72,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     private OutputMutator output;
     private OperatorContext context;
 
-    private ArrayIterator iterator;
+    //    private ArrayIterator iterator;
+    private Iterator iterator;
 
     private int rowCounter;
 
@@ -106,7 +109,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
             tables = client.getTable(TIME, SUM_AGGREGATOR + scanSpec.getTableName())
                     .execute()
                     .body();
-            rowCounter = 0;
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -123,29 +125,32 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     @Override
     public int next() {
         int rowCount = 0;
+        if (tables.size() == 0) {
+            iterator = null;
+            return 0;
+        }
         try {
             while (iterator == null || !iterator.hasNext()) {
-                if (rowCounter == tables.size()) {
+                if (iterator != null && !iterator.hasNext()) {
                     iterator = null;
                     return 0;
                 }
                 context.getStats().startWait();
-                try {
-                    iterator = new ArrayIterator(tables.get(0).getClass().getDeclaredFields());
-                } finally {
-                    context.getStats().stopWait();
-                }
-                rowCounter++;
+                iterator = tables.get(0).getDps().keySet().iterator();
+                context.getStats().stopWait();
             }
-            for (; rowCount < TARGET_RECORD_COUNT && iterator.hasNext(); rowCount++) {
-                addRowResult(tables.get(0), rowCount);
-                iterator.next();
+
+            for (int i = 0; i < 5; i++) {
+                addRowResult(tables.get(0), i);
+            }
+            ++rowCount;
+            iterator.next();
+
+            for (ProjectedColumnInfo pci : projectedCols) {
+                pci.vv.getMutator().setValueCount(rowCount);
             }
         } catch (Exception ex) {
             throw new RuntimeException(ex);
-        }
-        for (ProjectedColumnInfo pci : projectedCols) {
-            pci.vv.getMutator().setValueCount(rowCount);
         }
         return rowCount;
     }
@@ -159,15 +164,35 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         if (projectedCols == null) {
             initCols(new Schema());
         }
+        String timestamp = "";
+        String value = "";
+
+        for (String time : table.getDps().keySet()) {
+            timestamp = time;
+            value = table.getDps().get(time);
+            break;
+        }
+
+
         for (ProjectedColumnInfo pci : projectedCols) {
-            if (pci.openTSDBColumn.getColumnName().equals("metric")) {
-                setColumnValue(table.getMetric(), rowIndex, pci);
-            } else if (pci.openTSDBColumn.getColumnName().equals("tags")) {
-                setColumnValue(table.getTags().toString(), rowIndex, pci);
-            } else if (pci.openTSDBColumn.getColumnName().equals("aggregate tags")) {
-                setColumnValue(table.getAggregateTags().toString(), rowIndex, pci);
-            } else if (pci.openTSDBColumn.getColumnName().equals("dps")) {
-                setColumnValue(table.getDps().toString(), rowIndex, pci);
+            switch (pci.openTSDBColumn.getColumnName()) {
+                case "metric":
+                    setColumnValue(table.getMetric(), rowIndex, pci);
+                    break;
+                case "tags":
+                    setColumnValue(table.getTags().toString(), rowIndex, pci);
+                    break;
+                case "aggregate tags":
+                    setColumnValue(table.getAggregateTags().toString(), rowIndex, pci);
+                    break;
+                case "timestamp":
+                    Calendar calendar = Calendar.getInstance();
+                    calendar.setTimeInMillis(Long.parseLong(timestamp));
+                    setColumnValue(new SimpleDateFormat("HH:mm:ss:SSS").format(calendar.getTime()), rowIndex, pci);
+                    break;
+                case "aggregated value":
+                    setColumnValue(value, rowIndex, pci);
+                    break;
             }
         }
     }
