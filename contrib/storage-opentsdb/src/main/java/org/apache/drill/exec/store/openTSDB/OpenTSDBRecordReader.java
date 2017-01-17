@@ -28,7 +28,6 @@ import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
-import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.ops.FragmentContext;
@@ -62,10 +61,10 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     private static final String TIME = "5y-ago";
     private static final String SUM_AGGREGATOR = "sum:";
 
+    private static final Map<OpenTSDBTypes, MinorType> TYPES;
+
     private final OpenTSDB client;
     private final OpenTSDBSubScan.OpenTSDBSubScanSpec scanSpec;
-
-    private final boolean unionEnabled;
 
     private List<Table> tables;
 
@@ -75,20 +74,25 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     private Iterator iterator;
     private List<String> showed = new ArrayList<>();
 
+    private ImmutableList<ProjectedColumnInfo> projectedCols;
+
     private static class ProjectedColumnInfo {
         int index;
         ValueVector vv;
         ColumnDTO openTSDBColumn;
     }
 
-    private ImmutableList<ProjectedColumnInfo> projectedCols;
+    static {
+        TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
+                .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
+                .build();
+    }
 
     public OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
                                 List<SchemaPath> projectedColumns, FragmentContext context) {
         setColumns(projectedColumns);
         this.client = client;
         scanSpec = subScanSpec;
-        unionEnabled = context.getOptions().getOption(ExecConstants.ENABLE_UNION_TYPE);
         log.debug("Scan spec: {}", subScanSpec);
     }
 
@@ -97,65 +101,73 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         this.output = output;
         this.context = context;
 
+        addColumnsNames();
+        tables = getTablesFromDB();
+    }
+
+    @Override
+    public int next() {
+        if (isTablesListEmpty()) {
+            iterator = null;
+            return 0;
+        }
+        return processOpenTSDBTablesData();
+    }
+
+    @Override
+    public void close() throws Exception {}
+
+    private List<Table> getTablesFromDB() {
+        try {
+            return client.getTable(TIME, SUM_AGGREGATOR + scanSpec.getTableName())
+                    .execute()
+                    .body();
+        } catch (IOException e) {
+            e.printStackTrace();
+            return null;
+        }
+    }
+
+    private int processOpenTSDBTablesData() {
+        for (Table table : tables) {
+            try {
+                if (setupTimestampIterator(table)) { return 0; }
+
+                addRowResult(table);
+                iterator.next();
+
+                setValueCountForMutator();
+            } catch (Exception ex) {
+                throw new RuntimeException(ex);
+            }
+        }
+        return 1;
+    }
+
+    private boolean setupTimestampIterator(Table table) {
+        while (iterator == null || !iterator.hasNext()) {
+            if (iterator != null && !iterator.hasNext()) {
+                iterator = null;
+                return true;
+            }
+            context.getStats().startWait();
+            iterator = table.getDps().keySet().iterator();
+            context.getStats().stopWait();
+        }
+        return false;
+    }
+
+    private boolean isTablesListEmpty() {
+        return tables.size() == 0;
+    }
+
+    private void addColumnsNames() {
         if (!isStarQuery()) {
             List<String> colNames = Lists.newArrayList();
             for (SchemaPath p : this.getColumns()) {
                 colNames.add(p.getAsUnescapedPath());
             }
         }
-        try {
-            tables = client.getTable(TIME, SUM_AGGREGATOR + scanSpec.getTableName())
-                    .execute()
-                    .body();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    private static final Map<OpenTSDBTypes, MinorType> TYPES;
-
-    static {
-        TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
-                .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
-                .build();
-    }
-
-    @Override
-    public int next() {
-        if (isTablesListEmpty()) return 0;
-
-        try {
-            while (iterator == null || !iterator.hasNext()) {
-                if (iterator != null && !iterator.hasNext()) {
-                    iterator = null;
-                    return 0;
-                }
-                context.getStats().startWait();
-                iterator = tables.get(0).getDps().keySet().iterator();
-                context.getStats().stopWait();
-            }
-
-            addRowResult(tables.get(0));
-            iterator.next();
-
-            setValueCountForMutator();
-        } catch (Exception ex) {
-            throw new RuntimeException(ex);
-        }
-        return 1;
-    }
-
-    @Override
-    public void close() throws Exception {
-
-    }
-
-    private boolean isTablesListEmpty() {
-        if (tables.size() == 0) {
-            iterator = null;
-            return true;
-        }
-        return false;
     }
 
     private void setValueCountForMutator() {
@@ -165,9 +177,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
 
     private void addRowResult(Table table) throws SchemaChangeException {
-        if (projectedCols == null) {
-            initCols(new Schema());
-        }
+        setupProjectedColsIfItNull();
+
         String timestamp = null;
         String value = null;
 
@@ -181,6 +192,12 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         }
 
         setupDataToDrillTable(table, timestamp, value);
+    }
+
+    private void setupProjectedColsIfItNull() throws SchemaChangeException {
+        if (projectedCols == null) {
+            initCols(new Schema());
+        }
     }
 
     private void setupDataToDrillTable(Table table, String timestamp, String value) {
@@ -213,7 +230,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
                 .setSafe(0, value, 0, value.remaining());
     }
 
-
     private void initCols(Schema schema) throws SchemaChangeException {
         ImmutableList.Builder<ProjectedColumnInfo> pciBuilder = ImmutableList.builder();
 
@@ -224,25 +240,31 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
             final OpenTSDBTypes type = column.getColumnType();
             TypeProtos.MinorType minorType = TYPES.get(type);
 
-            if (minorType == null) {
+            if (isMinorTypeNull(minorType)) {
                 logExceptionMessage(name, type);
                 continue;
             }
 
-            MajorType majorType = getMajorType(minorType);
-
-            MaterializedField field =
-                    MaterializedField.create(name, majorType);
-
-            ValueVector vector =
-                    getValueVector(minorType, majorType, field);
-
-            ProjectedColumnInfo pci =
-                    getProjectedColumnInfo(i, column, vector);
-
+            ProjectedColumnInfo pci = getProjectedColumnInfo(i, column, name, minorType);
             pciBuilder.add(pci);
         }
         projectedCols = pciBuilder.build();
+    }
+
+    private boolean isMinorTypeNull(MinorType minorType) {
+        return minorType == null;
+    }
+
+    private ProjectedColumnInfo getProjectedColumnInfo(int i, ColumnDTO column, String name, MinorType minorType) throws SchemaChangeException {
+        MajorType majorType = getMajorType(minorType);
+
+        MaterializedField field =
+                MaterializedField.create(name, majorType);
+
+        ValueVector vector =
+                getValueVector(minorType, majorType, field);
+
+        return getProjectedColumnInfo(i, column, vector);
     }
 
     private void logExceptionMessage(String name, OpenTSDBTypes type) {
