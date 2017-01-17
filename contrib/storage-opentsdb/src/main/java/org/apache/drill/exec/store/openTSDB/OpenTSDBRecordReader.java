@@ -59,7 +59,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
      * openTSDB required constants for API call
      */
     private static final String TIME = "5y-ago";
-    private static final String SUM_AGGREGATOR = "sum:";
+    private static final String SUM_AGGREGATOR = "sum";
 
     private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
@@ -119,13 +119,32 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
     private List<Table> getTablesFromDB() {
         try {
-            return client.getTable(TIME, SUM_AGGREGATOR + scanSpec.getTableName())
+            String tableName;
+            String aggregator;
+
+            if (scanSpec.getTableName().contains(":")) {
+                aggregator = getAggregatorFromTableName();
+                tableName = getSimpleTableName();
+            } else {
+                aggregator = SUM_AGGREGATOR;
+                tableName = scanSpec.getTableName();
+            }
+
+            return client.getTable(TIME, aggregator + ":" + tableName)
                     .execute()
                     .body();
         } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
+    }
+
+    private String getAggregatorFromTableName() {
+        return scanSpec.getTableName().substring(scanSpec.getTableName().lastIndexOf(":") + 1);
+    }
+
+    private String getSimpleTableName() {
+        return scanSpec.getTableName().substring(0, scanSpec.getTableName().lastIndexOf(":"));
     }
 
     private int processOpenTSDBTablesData() {

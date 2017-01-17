@@ -160,14 +160,8 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
     @Override
     public OpenTSDBSubScan getSpecificScan(int minorFragmentId) {
-        List<OpenTSDBWork> workList = assignments.get(minorFragmentId);
-
         List<OpenTSDBSubScanSpec> scanSpecList = Lists.newArrayList();
-
-        for (OpenTSDBWork ignored : workList) {
-            scanSpecList.add(new OpenTSDBSubScanSpec(getTableName()));
-        }
-
+        scanSpecList.add(new OpenTSDBSubScanSpec(getTableName()));
         return new OpenTSDBSubScan(storagePlugin, storagePluginConfig, scanSpecList, this.columns);
     }
 

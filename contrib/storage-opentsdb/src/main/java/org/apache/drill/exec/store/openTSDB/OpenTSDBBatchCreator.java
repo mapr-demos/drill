@@ -44,7 +44,6 @@ public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
                     columns = GroupScan.ALL_COLUMNS;
                 }
                 readers.add(new OpenTSDBRecordReader(subScan.getStorageEngine().getClient(), scanSpec, columns, context));
-                break;
             } catch (Exception e1) {
                 throw new ExecutionSetupException(e1);
             }
