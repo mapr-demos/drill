@@ -89,10 +89,6 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
         for (DrillbitEndpoint endpoint : endpoints) {
             endpointMap.put(endpoint.getAddress(), endpoint);
         }
-
-
-        OpenTSDBWork work = new OpenTSDBWork();
-        openTSDBWorkList.add(work);
     }
 
     private static class OpenTSDBWork implements CompleteWork {

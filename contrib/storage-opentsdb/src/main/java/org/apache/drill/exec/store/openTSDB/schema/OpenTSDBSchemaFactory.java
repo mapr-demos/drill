@@ -54,8 +54,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
         OpenTSDBTables schema = new OpenTSDBTables(schemaName);
-        SchemaPlus hPlus = parent.add(schemaName, schema);
-        schema.setHolder(hPlus);
+        parent.add(schemaName, schema);
     }
 
 
@@ -65,9 +64,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
 
         public OpenTSDBTables(String name) {
             super(ImmutableList.<String>of(), name);
-        }
-
-        public void setHolder(SchemaPlus plusOfThis) {
         }
 
         @Override
