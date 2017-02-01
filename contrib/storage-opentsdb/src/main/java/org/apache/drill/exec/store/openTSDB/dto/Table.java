@@ -29,9 +29,9 @@ import java.util.Map;
 @AllArgsConstructor
 public class Table {
 
-    public String metric;
-    public Map<String, String> tags;
-    public List<String> aggregateTags;
-    public Map<String, String> dps;
+  public String metric;
+  public Map<String, String> tags;
+  public List<String> aggregateTags;
+  public Map<String, String> dps;
 
 }

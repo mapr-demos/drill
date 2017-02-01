@@ -29,26 +29,26 @@ import java.util.List;
 @Slf4j
 public class Schema {
 
-    private final List<ColumnDTO> columns = new ArrayList<>();
+  private final List<ColumnDTO> columns = new ArrayList<>();
 
-    public Schema() {
-        columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.TIMESTAMP));
-        columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.DOUBLE));
-        columns.add(new ColumnDTO("tags", OpenTSDBTypes.STRING));
-    }
+  public Schema() {
+    columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
+    columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
+    columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.TIMESTAMP));
+    columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.DOUBLE));
+    columns.add(new ColumnDTO("tags", OpenTSDBTypes.STRING));
+  }
 
-    // TODO: refactor this
-    public List<ColumnDTO> getColumns() throws IOException {
-        return Collections.unmodifiableList(columns);
-    }
+  // TODO: refactor this
+  public List<ColumnDTO> getColumns() throws IOException {
+    return Collections.unmodifiableList(columns);
+  }
 
-    public int getColumnCount() {
-        return columns.size();
-    }
+  public int getColumnCount() {
+    return columns.size();
+  }
 
-    public ColumnDTO getColumnByIndex(int columnIndex) {
-        return columns.get(columnIndex);
-    }
+  public ColumnDTO getColumnByIndex(int columnIndex) {
+    return columns.get(columnIndex);
+  }
 }

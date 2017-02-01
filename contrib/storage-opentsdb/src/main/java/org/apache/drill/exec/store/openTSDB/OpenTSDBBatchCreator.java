@@ -32,22 +32,22 @@ import org.apache.drill.exec.store.RecordReader;
 import java.util.List;
 
 public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
-    @Override
-    public CloseableRecordBatch getBatch(FragmentContext context, OpenTSDBSubScan subScan, List<RecordBatch> children) throws ExecutionSetupException {
-        Preconditions.checkArgument(children.isEmpty());
-        List<RecordReader> readers = Lists.newArrayList();
-        List<SchemaPath> columns;
+  @Override
+  public CloseableRecordBatch getBatch(FragmentContext context, OpenTSDBSubScan subScan, List<RecordBatch> children) throws ExecutionSetupException {
+    Preconditions.checkArgument(children.isEmpty());
+    List<RecordReader> readers = Lists.newArrayList();
+    List<SchemaPath> columns;
 
-        for (OpenTSDBSubScan.OpenTSDBSubScanSpec scanSpec : subScan.getTabletScanSpecList()) {
-            try {
-                if ((columns = subScan.getColumns()) == null) {
-                    columns = GroupScan.ALL_COLUMNS;
-                }
-                readers.add(new OpenTSDBRecordReader(subScan.getStorageEngine().getClient(), scanSpec, columns, context));
-            } catch (Exception e1) {
-                throw new ExecutionSetupException(e1);
-            }
+    for (OpenTSDBSubScan.OpenTSDBSubScanSpec scanSpec : subScan.getTabletScanSpecList()) {
+      try {
+        if ((columns = subScan.getColumns()) == null) {
+          columns = GroupScan.ALL_COLUMNS;
         }
-        return new ScanBatch(subScan, context, readers.iterator());
+        readers.add(new OpenTSDBRecordReader(subScan.getStorageEngine().getClient(), scanSpec, columns, context));
+      } catch (Exception e1) {
+        throw new ExecutionSetupException(e1);
+      }
     }
+    return new ScanBatch(subScan, context, readers.iterator());
+  }
 }

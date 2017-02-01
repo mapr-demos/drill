@@ -53,195 +53,195 @@ import java.util.Map;
 @JsonTypeName("openTSDB-scan")
 public class OpenTSDBGroupScan extends AbstractGroupScan {
 
-    private static final long DEFAULT_TABLET_SIZE = 1000;
+  private static final long DEFAULT_TABLET_SIZE = 1000;
 
-    private OpenTSDBStoragePluginConfig storagePluginConfig;
-    private OpenTSDBScanSpec openTSDBScanSpec;
-    private OpenTSDBStoragePlugin storagePlugin;
-    private boolean filterPushedDown = false;
-    private ListMultimap<Integer, OpenTSDBWork> assignments;
-    private List<SchemaPath> columns;
-    private List<OpenTSDBWork> openTSDBWorkList = Lists.newArrayList();
-    private List<EndpointAffinity> affinities;
+  private OpenTSDBStoragePluginConfig storagePluginConfig;
+  private OpenTSDBScanSpec openTSDBScanSpec;
+  private OpenTSDBStoragePlugin storagePlugin;
+  private boolean filterPushedDown = false;
+  private ListMultimap<Integer, OpenTSDBWork> assignments;
+  private List<SchemaPath> columns;
+  private List<OpenTSDBWork> openTSDBWorkList = Lists.newArrayList();
+  private List<EndpointAffinity> affinities;
 
-    @JsonCreator
-    public OpenTSDBGroupScan(@JsonProperty("openTSDBScanSpec") OpenTSDBScanSpec openTSDBScanSpec,
-                             @JsonProperty("storage") OpenTSDBStoragePluginConfig openTSDBStoragePluginConfig,
-                             @JsonProperty("columns") List<SchemaPath> columns,
-                             @JacksonInject StoragePluginRegistry pluginRegistry) throws IOException, ExecutionSetupException {
-        this((OpenTSDBStoragePlugin) pluginRegistry.getPlugin(openTSDBStoragePluginConfig), openTSDBScanSpec, columns);
+  @JsonCreator
+  public OpenTSDBGroupScan(@JsonProperty("openTSDBScanSpec") OpenTSDBScanSpec openTSDBScanSpec,
+                           @JsonProperty("storage") OpenTSDBStoragePluginConfig openTSDBStoragePluginConfig,
+                           @JsonProperty("columns") List<SchemaPath> columns,
+                           @JacksonInject StoragePluginRegistry pluginRegistry) throws IOException, ExecutionSetupException {
+    this((OpenTSDBStoragePlugin) pluginRegistry.getPlugin(openTSDBStoragePluginConfig), openTSDBScanSpec, columns);
+  }
+
+  public OpenTSDBGroupScan(OpenTSDBStoragePlugin storagePlugin,
+                           OpenTSDBScanSpec scanSpec, List<SchemaPath> columns) {
+    super((String) null);
+    this.storagePlugin = storagePlugin;
+    this.storagePluginConfig = storagePlugin.getConfig();
+    this.openTSDBScanSpec = scanSpec;
+    this.columns = columns == null || columns.size() == 0 ? ALL_COLUMNS : columns;
+    init();
+  }
+
+  private void init() {
+    Collection<DrillbitEndpoint> endpoints = storagePlugin.getContext().getBits();
+    Map<String, DrillbitEndpoint> endpointMap = Maps.newHashMap();
+
+    for (DrillbitEndpoint endpoint : endpoints) {
+      endpointMap.put(endpoint.getAddress(), endpoint);
     }
+  }
 
-    public OpenTSDBGroupScan(OpenTSDBStoragePlugin storagePlugin,
-                             OpenTSDBScanSpec scanSpec, List<SchemaPath> columns) {
-        super((String) null);
-        this.storagePlugin = storagePlugin;
-        this.storagePluginConfig = storagePlugin.getConfig();
-        this.openTSDBScanSpec = scanSpec;
-        this.columns = columns == null || columns.size() == 0 ? ALL_COLUMNS : columns;
-        init();
-    }
+  private static class OpenTSDBWork implements CompleteWork {
 
-    private void init() {
-        Collection<DrillbitEndpoint> endpoints = storagePlugin.getContext().getBits();
-        Map<String, DrillbitEndpoint> endpointMap = Maps.newHashMap();
+    private EndpointByteMapImpl byteMap = new EndpointByteMapImpl();
 
-        for (DrillbitEndpoint endpoint : endpoints) {
-            endpointMap.put(endpoint.getAddress(), endpoint);
-        }
-    }
-
-    private static class OpenTSDBWork implements CompleteWork {
-
-        private EndpointByteMapImpl byteMap = new EndpointByteMapImpl();
-
-        @Override
-        public long getTotalBytes() {
-            return DEFAULT_TABLET_SIZE;
-        }
-
-        @Override
-        public EndpointByteMap getByteMap() {
-            return byteMap;
-        }
-
-        @Override
-        public int compareTo(CompleteWork o) {
-            return 0;
-        }
-    }
-
-    /**
-     * Private constructor, used for cloning.
-     *
-     * @param that The OpenTSDBGroupScan to clone
-     */
-    public OpenTSDBGroupScan(OpenTSDBGroupScan that) {
-        super((String) null);
-        this.columns = that.columns;
-        this.openTSDBScanSpec = that.openTSDBScanSpec;
-        this.storagePlugin = that.storagePlugin;
-        this.storagePluginConfig = that.storagePluginConfig;
-        this.filterPushedDown = that.filterPushedDown;
-        this.openTSDBWorkList = that.openTSDBWorkList;
-        this.assignments = that.assignments;
-        init();
+    @Override
+    public long getTotalBytes() {
+      return DEFAULT_TABLET_SIZE;
     }
 
     @Override
-    public GroupScan clone(List<SchemaPath> columns) {
-        OpenTSDBGroupScan newScan = new OpenTSDBGroupScan(this);
-        newScan.columns = columns;
-        return newScan;
+    public EndpointByteMap getByteMap() {
+      return byteMap;
     }
 
     @Override
-    public List<EndpointAffinity> getOperatorAffinity() {
-        if (affinities == null) {
-            affinities = AffinityCreator.getAffinityMap(openTSDBWorkList);
-        }
-        return affinities;
+    public int compareTo(CompleteWork o) {
+      return 0;
     }
+  }
 
-    @Override
-    public int getMaxParallelizationWidth() {
-        return openTSDBWorkList.size();
+  /**
+   * Private constructor, used for cloning.
+   *
+   * @param that The OpenTSDBGroupScan to clone
+   */
+  public OpenTSDBGroupScan(OpenTSDBGroupScan that) {
+    super((String) null);
+    this.columns = that.columns;
+    this.openTSDBScanSpec = that.openTSDBScanSpec;
+    this.storagePlugin = that.storagePlugin;
+    this.storagePluginConfig = that.storagePluginConfig;
+    this.filterPushedDown = that.filterPushedDown;
+    this.openTSDBWorkList = that.openTSDBWorkList;
+    this.assignments = that.assignments;
+    init();
+  }
+
+  @Override
+  public GroupScan clone(List<SchemaPath> columns) {
+    OpenTSDBGroupScan newScan = new OpenTSDBGroupScan(this);
+    newScan.columns = columns;
+    return newScan;
+  }
+
+  @Override
+  public List<EndpointAffinity> getOperatorAffinity() {
+    if (affinities == null) {
+      affinities = AffinityCreator.getAffinityMap(openTSDBWorkList);
     }
+    return affinities;
+  }
 
-    // TODO: Check this getMappings method
-    @Override
-    public void applyAssignments(List<DrillbitEndpoint> incomingEndpoints) {
-        assignments = AssignmentCreator.getMappings(incomingEndpoints, openTSDBWorkList);
-    }
+  @Override
+  public int getMaxParallelizationWidth() {
+    return openTSDBWorkList.size();
+  }
 
-    @Override
-    public OpenTSDBSubScan getSpecificScan(int minorFragmentId) {
-        List<OpenTSDBSubScanSpec> scanSpecList = Lists.newArrayList();
-        scanSpecList.add(new OpenTSDBSubScanSpec(getTableName()));
-        return new OpenTSDBSubScan(storagePlugin, storagePluginConfig, scanSpecList, this.columns);
-    }
+  // TODO: Check this getMappings method
+  @Override
+  public void applyAssignments(List<DrillbitEndpoint> incomingEndpoints) {
+    assignments = AssignmentCreator.getMappings(incomingEndpoints, openTSDBWorkList);
+  }
 
-    @Override
-    public ScanStats getScanStats() {
-        long recordCount = 100000L * openTSDBWorkList.size();
-        return new ScanStats(ScanStats.GroupScanProperty.NO_EXACT_ROW_COUNT, recordCount, 1, recordCount);
-    }
+  @Override
+  public OpenTSDBSubScan getSpecificScan(int minorFragmentId) {
+    List<OpenTSDBSubScanSpec> scanSpecList = Lists.newArrayList();
+    scanSpecList.add(new OpenTSDBSubScanSpec(getTableName()));
+    return new OpenTSDBSubScan(storagePlugin, storagePluginConfig, scanSpecList, this.columns);
+  }
 
-    @Override
-    @JsonIgnore
-    public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) {
-        Preconditions.checkArgument(children.isEmpty());
-        return new OpenTSDBGroupScan(this);
-    }
+  @Override
+  public ScanStats getScanStats() {
+    long recordCount = 100000L * openTSDBWorkList.size();
+    return new ScanStats(ScanStats.GroupScanProperty.NO_EXACT_ROW_COUNT, recordCount, 1, recordCount);
+  }
 
-    @JsonIgnore
-    public OpenTSDBStoragePlugin getStoragePlugin() {
-        return storagePlugin;
-    }
+  @Override
+  @JsonIgnore
+  public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) {
+    Preconditions.checkArgument(children.isEmpty());
+    return new OpenTSDBGroupScan(this);
+  }
 
-    @JsonIgnore
-    public String getTableName() {
-        return getOpenTSDBScanSpec().getTableName();
-    }
+  @JsonIgnore
+  public OpenTSDBStoragePlugin getStoragePlugin() {
+    return storagePlugin;
+  }
 
-
-    @Override
-    public String getDigest() {
-        return toString();
-    }
-
-    @Override
-    public String toString() {
-        return "OpenTSDBGroupScan [OpenTSDBScanSpec="
-                + openTSDBScanSpec + "]";
-    }
-
-    @JsonProperty("storage")
-    public OpenTSDBStoragePluginConfig getStorageConfig() {
-        return this.storagePluginConfig;
-    }
-
-    @JsonProperty
-    public List<SchemaPath> getColumns() {
-        return columns;
-    }
-
-    @JsonProperty
-    public OpenTSDBScanSpec getOpenTSDBScanSpec() {
-        return openTSDBScanSpec;
-    }
-
-    @Override
-    @JsonIgnore
-    public boolean canPushdownProjects(List<SchemaPath> columns) {
-        return true;
-    }
-
-    @JsonIgnore
-    public void setFilterPushedDown(boolean b) {
-        this.filterPushedDown = true;
-    }
-
-    @JsonIgnore
-    public boolean isFilterPushedDown() {
-        return filterPushedDown;
-    }
+  @JsonIgnore
+  public String getTableName() {
+    return getOpenTSDBScanSpec().getTableName();
+  }
 
 
-    /**
-     * Empty constructor, do not use, only for testing.
-     */
-    @VisibleForTesting
-    public OpenTSDBGroupScan() {
-        super((String) null);
-    }
+  @Override
+  public String getDigest() {
+    return toString();
+  }
 
-    /**
-     * Do not use, only for testing.
-     */
-    @VisibleForTesting
-    public void setOpenTSDBScanSpec(OpenTSDBScanSpec openTSDBScanSpec) {
-        this.openTSDBScanSpec = openTSDBScanSpec;
-    }
+  @Override
+  public String toString() {
+    return "OpenTSDBGroupScan [OpenTSDBScanSpec="
+        + openTSDBScanSpec + "]";
+  }
+
+  @JsonProperty("storage")
+  public OpenTSDBStoragePluginConfig getStorageConfig() {
+    return this.storagePluginConfig;
+  }
+
+  @JsonProperty
+  public List<SchemaPath> getColumns() {
+    return columns;
+  }
+
+  @JsonProperty
+  public OpenTSDBScanSpec getOpenTSDBScanSpec() {
+    return openTSDBScanSpec;
+  }
+
+  @Override
+  @JsonIgnore
+  public boolean canPushdownProjects(List<SchemaPath> columns) {
+    return true;
+  }
+
+  @JsonIgnore
+  public void setFilterPushedDown(boolean b) {
+    this.filterPushedDown = true;
+  }
+
+  @JsonIgnore
+  public boolean isFilterPushedDown() {
+    return filterPushedDown;
+  }
+
+
+  /**
+   * Empty constructor, do not use, only for testing.
+   */
+  @VisibleForTesting
+  public OpenTSDBGroupScan() {
+    super((String) null);
+  }
+
+  /**
+   * Do not use, only for testing.
+   */
+  @VisibleForTesting
+  public void setOpenTSDBScanSpec(OpenTSDBScanSpec openTSDBScanSpec) {
+    this.openTSDBScanSpec = openTSDBScanSpec;
+  }
 
 }

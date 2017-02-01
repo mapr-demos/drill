@@ -27,9 +27,9 @@ import java.util.Set;
 
 public interface OpenTSDB {
 
-    @GET("api/suggest?type=metrics&max=100")
-    Call<Set<String>> getAllTablesName();
+  @GET("api/suggest?type=metrics&max=100")
+  Call<Set<String>> getAllTablesName();
 
-    @GET("api/query")
-    Call<List<Table>> getTable(@Query("start") String time, @Query("m") String tableName);
+  @GET("api/query")
+  Call<List<Table>> getTable(@Query("start") String time, @Query("m") String tableName);
 }

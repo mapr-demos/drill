@@ -58,281 +58,284 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 @Slf4j
 public class OpenTSDBRecordReader extends AbstractRecordReader {
 
-    /**
-     * openTSDB required constants for API call
-     */
-    private static final String DEFAULT_TIME = "5y-ago";
-    private static final String SUM_AGGREGATOR = "sum";
+  /**
+   * openTSDB required constants for API call
+   */
+  private static final String DEFAULT_TIME = "5y-ago";
+  private static final String SUM_AGGREGATOR = "sum";
 
-    private static final String TIME = "time";
-    private static final String METRIC = "metric";
-    private static final String INTERPOLATION = "interpolation";
+  private static final String TIME = "time";
+  private static final String METRIC = "metric";
+  private static final String INTERPOLATION = "interpolation";
 
-    private static final Map<OpenTSDBTypes, MinorType> TYPES;
+  private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
-    private final OpenTSDB client;
+  private final OpenTSDB client;
 
-    private List<Table> tables;
+  private List<Table> tables;
 
-    private OutputMutator output;
-    private OperatorContext context;
+  private OutputMutator output;
+  private OperatorContext context;
 
-    private Iterator iterator;
-    private List<String> showed = new ArrayList<>();
+  private Iterator iterator;
+  private List<String> showed = new ArrayList<>();
 
-    private ImmutableList<ProjectedColumnInfo> projectedCols;
+  private ImmutableList<ProjectedColumnInfo> projectedCols;
 
-    private Map<String, String> queryParameters;
+  private Map<String, String> queryParameters;
 
-    private static class ProjectedColumnInfo {
-        ValueVector vv;
-        ColumnDTO openTSDBColumn;
+  private static class ProjectedColumnInfo {
+    ValueVector vv;
+    ColumnDTO openTSDBColumn;
+  }
+
+  static {
+    TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
+        .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
+        .put(OpenTSDBTypes.DOUBLE, MinorType.FLOAT8)
+        .put(OpenTSDBTypes.TIMESTAMP, MinorType.TIMESTAMP)
+        .build();
+  }
+
+  public OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
+                              List<SchemaPath> projectedColumns, FragmentContext context) {
+    setColumns(projectedColumns);
+    this.client = client;
+    queryParameters = parseFROMRowData(subScanSpec.getTableName());
+    log.debug("Scan spec: {}", subScanSpec);
+  }
+
+  private Map<String, String> parseFROMRowData(String rowData) {
+    String FROMRowData = rowData.replaceAll("[()]", "");
+    return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
+  }
+
+  @Override
+  public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
+    this.output = output;
+    this.context = context;
+
+    addColumnsNames();
+    tables = getTablesFromDB();
+  }
+
+  @Override
+  public int next() {
+    if (isTablesListEmpty()) {
+      iterator = null;
+      return 0;
     }
+    return processOpenTSDBTablesData();
+  }
 
-    static {
-        TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
-                .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
-                .put(OpenTSDBTypes.DOUBLE, MinorType.FLOAT8)
-                .put(OpenTSDBTypes.TIMESTAMP, MinorType.TIMESTAMP)
-                .build();
+  @Override
+  public void close() throws Exception {
+  }
+
+  private List<Table> getTablesFromDB() {
+    try {
+      String tableName =
+          queryParameters.get(METRIC);
+
+      String interpolation =
+          getProperty(INTERPOLATION, SUM_AGGREGATOR);
+
+      String time =
+          getProperty(TIME, DEFAULT_TIME);
+
+      return client.getTable(time, interpolation + ":" + tableName).execute().body();
+    } catch (IOException e) {
+      e.printStackTrace();
+      return null;
     }
+  }
 
-    public OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
-                                List<SchemaPath> projectedColumns, FragmentContext context) {
-        setColumns(projectedColumns);
-        this.client = client;
-        queryParameters = parseFROMRowData(subScanSpec.getTableName());
-        log.debug("Scan spec: {}", subScanSpec);
-    }
+  private String getProperty(String propertyName, String defaultValue) {
+    return queryParameters.containsKey(propertyName) ?
+        queryParameters.get(propertyName) : defaultValue;
+  }
 
-    private Map<String, String> parseFROMRowData(String rowData) {
-        String FROMRowData = rowData.replaceAll("[()]","");
-        return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
-    }
-
-    @Override
-    public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
-        this.output = output;
-        this.context = context;
-
-        addColumnsNames();
-        tables = getTablesFromDB();
-    }
-
-    @Override
-    public int next() {
-        if (isTablesListEmpty()) {
-            iterator = null;
-            return 0;
-        }
-        return processOpenTSDBTablesData();
-    }
-
-    @Override
-    public void close() throws Exception {}
-
-    private List<Table> getTablesFromDB() {
-        try {
-            String tableName =
-                queryParameters.get(METRIC);
-
-            String interpolation =
-                getProperty(INTERPOLATION, SUM_AGGREGATOR);
-
-            String time =
-                getProperty(TIME, DEFAULT_TIME);
-
-            return client.getTable(time, interpolation + ":" + tableName).execute().body();
-        } catch (IOException e) {
-            e.printStackTrace();
-            return null;
-        }
-    }
-
-    private String getProperty(String propertyName, String defaultValue) {
-        return queryParameters.containsKey(propertyName) ?
-            queryParameters.get(propertyName) : defaultValue;
-    }
-
-    private int processOpenTSDBTablesData() {
-        for (Table table : tables) {
-            try {
-                if (setupTimestampIterator(table)) { return 0; }
-
-                addRowResult(table);
-                iterator.next();
-
-                setValueCountForMutator();
-            } catch (Exception ex) {
-                throw new RuntimeException(ex);
-            }
-        }
-        return 1;
-    }
-
-    private boolean setupTimestampIterator(Table table) {
-        while (iterator == null || !iterator.hasNext()) {
-            if (iterator != null && !iterator.hasNext()) {
-                iterator = null;
-                return true;
-            }
-            context.getStats().startWait();
-            iterator = table.getDps().keySet().iterator();
-            context.getStats().stopWait();
-        }
-        return false;
-    }
-
-    private boolean isTablesListEmpty() {
-        return tables.size() == 0;
-    }
-
-    private void addColumnsNames() {
-        if (!isStarQuery()) {
-            List<String> colNames = Lists.newArrayList();
-            for (SchemaPath p : this.getColumns()) {
-                colNames.add(p.getAsUnescapedPath());
-            }
-        }
-    }
-
-    private void setValueCountForMutator() {
-        for (ProjectedColumnInfo pci : projectedCols) {
-            pci.vv.getMutator().setValueCount(1);
-        }
-    }
-
-    private void addRowResult(Table table) throws SchemaChangeException {
-        setupProjectedColsIfItNull();
-
-        String timestamp = null;
-        String value = null;
-
-        for (String time : table.getDps().keySet()) {
-            if (!showed.contains(time)) {
-                timestamp = time;
-                value = table.getDps().get(time);
-                showed.add(time);
-                break;
-            }
+  private int processOpenTSDBTablesData() {
+    for (Table table : tables) {
+      try {
+        if (setupTimestampIterator(table)) {
+          return 0;
         }
 
-        setupDataToDrillTable(table, timestamp, value);
+        addRowResult(table);
+        iterator.next();
+
+        setValueCountForMutator();
+      } catch (Exception ex) {
+        throw new RuntimeException(ex);
+      }
+    }
+    return 1;
+  }
+
+  private boolean setupTimestampIterator(Table table) {
+    while (iterator == null || !iterator.hasNext()) {
+      if (iterator != null && !iterator.hasNext()) {
+        iterator = null;
+        return true;
+      }
+      context.getStats().startWait();
+      iterator = table.getDps().keySet().iterator();
+      context.getStats().stopWait();
+    }
+    return false;
+  }
+
+  private boolean isTablesListEmpty() {
+    return tables.size() == 0;
+  }
+
+  private void addColumnsNames() {
+    if (!isStarQuery()) {
+      List<String> colNames = Lists.newArrayList();
+      for (SchemaPath p : this.getColumns()) {
+        colNames.add(p.getAsUnescapedPath());
+      }
+    }
+  }
+
+  private void setValueCountForMutator() {
+    for (ProjectedColumnInfo pci : projectedCols) {
+      pci.vv.getMutator().setValueCount(1);
+    }
+  }
+
+  private void addRowResult(Table table) throws SchemaChangeException {
+    setupProjectedColsIfItNull();
+
+    String timestamp = null;
+    String value = null;
+
+    for (String time : table.getDps().keySet()) {
+      if (!showed.contains(time)) {
+        timestamp = time;
+        value = table.getDps().get(time);
+        showed.add(time);
+        break;
+      }
     }
 
-    private void setupProjectedColsIfItNull() throws SchemaChangeException {
-        if (projectedCols == null) {
-            initCols(new Schema());
-        }
+    setupDataToDrillTable(table, timestamp, value);
+  }
+
+  private void setupProjectedColsIfItNull() throws SchemaChangeException {
+    if (projectedCols == null) {
+      initCols(new Schema());
     }
+  }
 
-    private void setupDataToDrillTable(Table table, String timestamp, String value) {
-        for (ProjectedColumnInfo pci : projectedCols) {
-            switch (pci.openTSDBColumn.getColumnName()) {
-                case "metric":
-                    setStringColumnValue(table.getMetric(), pci);
-                    break;
-                case "tags":
-                    setStringColumnValue(table.getTags().toString(), pci);
-                    break;
-                case "aggregate tags":
-                    setStringColumnValue(table.getAggregateTags().toString(), pci);
-                    break;
-                case "timestamp":
-                    setTimestampColumnValue(Long.parseLong(timestamp), pci);
-                    break;
-                case "aggregated value":
-                    setDoubleColumnValue(Double.parseDouble(value), pci);
-                    break;
-                default:
-                    throw new UnsupportedOperationException("Unsupported type.");
-            }
-        }
+  private void setupDataToDrillTable(Table table, String timestamp, String value) {
+    for (ProjectedColumnInfo pci : projectedCols) {
+      switch (pci.openTSDBColumn.getColumnName()) {
+        case "metric":
+          setStringColumnValue(table.getMetric(), pci);
+          break;
+        case "tags":
+          setStringColumnValue(table.getTags().toString(), pci);
+          break;
+        case "aggregate tags":
+          setStringColumnValue(table.getAggregateTags().toString(), pci);
+          break;
+        case "timestamp":
+          setTimestampColumnValue(Long.parseLong(timestamp), pci);
+          break;
+        case "aggregated value":
+          setDoubleColumnValue(Double.parseDouble(value), pci);
+          break;
+        default:
+          throw new UnsupportedOperationException("Unsupported type.");
+      }
     }
+  }
 
-    private void setStringColumnValue(String data, ProjectedColumnInfo pci) {
-        ByteBuffer value = ByteBuffer.wrap(data.getBytes(UTF_8));
-        ((NullableVarCharVector.Mutator) pci.vv.getMutator())
-                .setSafe(0, value, 0, value.remaining());
+  private void setStringColumnValue(String data, ProjectedColumnInfo pci) {
+    ByteBuffer value = ByteBuffer.wrap(data.getBytes(UTF_8));
+    ((NullableVarCharVector.Mutator) pci.vv.getMutator())
+        .setSafe(0, value, 0, value.remaining());
+  }
+
+  private void setTimestampColumnValue(Long data, ProjectedColumnInfo pci) {
+    ((NullableTimeStampVector.Mutator) pci.vv.getMutator())
+        .setSafe(0, data / 1000);
+  }
+
+  private void setDoubleColumnValue(Double data, ProjectedColumnInfo pci) {
+    ((NullableFloat8Vector.Mutator) pci.vv.getMutator())
+        .setSafe(0, data);
+  }
+
+  private void initCols(Schema schema) throws SchemaChangeException {
+    ImmutableList.Builder<ProjectedColumnInfo> pciBuilder = ImmutableList.builder();
+
+    for (int i = 0; i < schema.getColumnCount(); i++) {
+
+      ColumnDTO column = schema.getColumnByIndex(i);
+      final String name = column.getColumnName();
+      final OpenTSDBTypes type = column.getColumnType();
+      TypeProtos.MinorType minorType = TYPES.get(type);
+
+      if (isMinorTypeNull(minorType)) {
+        logExceptionMessage(name, type);
+        continue;
+      }
+
+      ProjectedColumnInfo pci = getProjectedColumnInfo(column, name, minorType);
+      pciBuilder.add(pci);
     }
+    projectedCols = pciBuilder.build();
+  }
 
-    private void setTimestampColumnValue(Long data, ProjectedColumnInfo pci) {
-        ((NullableTimeStampVector.Mutator) pci.vv.getMutator())
-                .setSafe(0, data / 1000);
-    }
+  private boolean isMinorTypeNull(MinorType minorType) {
+    return minorType == null;
+  }
 
-    private void setDoubleColumnValue(Double data, ProjectedColumnInfo pci) {
-        ((NullableFloat8Vector.Mutator) pci.vv.getMutator())
-                .setSafe(0, data);
-    }
+  private ProjectedColumnInfo getProjectedColumnInfo(ColumnDTO column, String name, MinorType minorType) throws SchemaChangeException {
+    MajorType majorType = getMajorType(minorType);
 
-    private void initCols(Schema schema) throws SchemaChangeException {
-        ImmutableList.Builder<ProjectedColumnInfo> pciBuilder = ImmutableList.builder();
+    MaterializedField field =
+        MaterializedField.create(name, majorType);
 
-        for (int i = 0; i < schema.getColumnCount(); i++) {
+    ValueVector vector =
+        getValueVector(minorType, majorType, field);
 
-            ColumnDTO column = schema.getColumnByIndex(i);
-            final String name = column.getColumnName();
-            final OpenTSDBTypes type = column.getColumnType();
-            TypeProtos.MinorType minorType = TYPES.get(type);
+    return getProjectedColumnInfo(column, vector);
+  }
 
-            if (isMinorTypeNull(minorType)) {
-                logExceptionMessage(name, type);
-                continue;
-            }
+  private void logExceptionMessage(String name, OpenTSDBTypes type) {
+    log.warn("Ignoring column that is unsupported.", UserException
+        .unsupportedError()
+        .message(
+            "A column you queried has a data type that is not currently supported by the OpenTSDB storage plugin. "
+                + "The column's name was %s and its OpenTSDB data type was %s. ",
+            name, type.toString())
+        .addContext("column Name", name)
+        .addContext("plugin", "openTSDB")
+        .build(log));
+  }
 
-            ProjectedColumnInfo pci = getProjectedColumnInfo(column, name, minorType);
-            pciBuilder.add(pci);
-        }
-        projectedCols = pciBuilder.build();
-    }
+  private MajorType getMajorType(MinorType minorType) {
+    MajorType majorType;
+    majorType = Types.optional(minorType);
+    return majorType;
+  }
 
-    private boolean isMinorTypeNull(MinorType minorType) {
-        return minorType == null;
-    }
+  private ValueVector getValueVector(MinorType minorType, MajorType majorType, MaterializedField field) throws SchemaChangeException {
+    final Class<? extends ValueVector> clazz = TypeHelper.getValueVectorClass(
+        minorType, majorType.getMode());
+    ValueVector vector = output.addField(field, clazz);
+    vector.allocateNew();
+    return vector;
+  }
 
-    private ProjectedColumnInfo getProjectedColumnInfo(ColumnDTO column, String name, MinorType minorType) throws SchemaChangeException {
-        MajorType majorType = getMajorType(minorType);
-
-        MaterializedField field =
-                MaterializedField.create(name, majorType);
-
-        ValueVector vector =
-                getValueVector(minorType, majorType, field);
-
-        return getProjectedColumnInfo(column, vector);
-    }
-
-    private void logExceptionMessage(String name, OpenTSDBTypes type) {
-        log.warn("Ignoring column that is unsupported.", UserException
-                .unsupportedError()
-                .message(
-                        "A column you queried has a data type that is not currently supported by the OpenTSDB storage plugin. "
-                                + "The column's name was %s and its OpenTSDB data type was %s. ",
-                        name, type.toString())
-                .addContext("column Name", name)
-                .addContext("plugin", "openTSDB")
-                .build(log));
-    }
-
-    private MajorType getMajorType(MinorType minorType) {
-        MajorType majorType;
-        majorType = Types.optional(minorType);
-        return majorType;
-    }
-
-    private ValueVector getValueVector(MinorType minorType, MajorType majorType, MaterializedField field) throws SchemaChangeException {
-        final Class<? extends ValueVector> clazz = TypeHelper.getValueVectorClass(
-                minorType, majorType.getMode());
-        ValueVector vector = output.addField(field, clazz);
-        vector.allocateNew();
-        return vector;
-    }
-
-    private ProjectedColumnInfo getProjectedColumnInfo(ColumnDTO column, ValueVector vector) {
-        ProjectedColumnInfo pci = new ProjectedColumnInfo();
-        pci.vv = vector;
-        pci.openTSDBColumn = column;
-        return pci;
-    }
+  private ProjectedColumnInfo getProjectedColumnInfo(ColumnDTO column, ValueVector vector) {
+    ProjectedColumnInfo pci = new ProjectedColumnInfo();
+    pci.vv = vector;
+    pci.openTSDBColumn = column;
+    return pci;
+  }
 }

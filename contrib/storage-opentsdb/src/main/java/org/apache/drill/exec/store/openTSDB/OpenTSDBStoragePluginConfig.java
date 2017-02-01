@@ -29,32 +29,32 @@ import java.io.IOException;
 @JsonTypeName(OpenTSDBStoragePluginConfig.NAME)
 public class OpenTSDBStoragePluginConfig extends StoragePluginConfigBase {
 
-    public static final String NAME = "openTSDB";
+  public static final String NAME = "openTSDB";
 
-    private final String connection;
+  private final String connection;
 
-    @JsonCreator
-    public OpenTSDBStoragePluginConfig(@JsonProperty("connection") String connection) throws IOException {
-        this.connection = connection;
-    }
+  @JsonCreator
+  public OpenTSDBStoragePluginConfig(@JsonProperty("connection") String connection) throws IOException {
+    this.connection = connection;
+  }
 
-    public String getConnection() {
-        return connection;
-    }
+  public String getConnection() {
+    return connection;
+  }
 
-    @Override
-    public boolean equals(Object o) {
-        if (this == o) return true;
-        if (o == null || getClass() != o.getClass()) return false;
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
 
-        OpenTSDBStoragePluginConfig that = (OpenTSDBStoragePluginConfig) o;
+    OpenTSDBStoragePluginConfig that = (OpenTSDBStoragePluginConfig) o;
 
-        return connection != null ? connection.equals(that.connection) : that.connection == null;
+    return connection != null ? connection.equals(that.connection) : that.connection == null;
 
-    }
+  }
 
-    @Override
-    public int hashCode() {
-        return connection != null ? connection.hashCode() : 0;
-    }
+  @Override
+  public int hashCode() {
+    return connection != null ? connection.hashCode() : 0;
+  }
 }

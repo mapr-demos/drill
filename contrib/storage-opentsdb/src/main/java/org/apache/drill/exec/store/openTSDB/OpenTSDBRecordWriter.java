@@ -27,33 +27,33 @@ import java.util.Map;
 @Slf4j
 public class OpenTSDBRecordWriter extends AbstractRecordWriter {
 
-    @Override
-    public void init(Map<String, String> writerOptions) throws IOException {
+  @Override
+  public void init(Map<String, String> writerOptions) throws IOException {
 
-    }
+  }
 
-    @Override
-    public void updateSchema(VectorAccessible batch) throws IOException {
+  @Override
+  public void updateSchema(VectorAccessible batch) throws IOException {
 
-    }
+  }
 
-    @Override
-    public void startRecord() throws IOException {
+  @Override
+  public void startRecord() throws IOException {
 
-    }
+  }
 
-    @Override
-    public void endRecord() throws IOException {
+  @Override
+  public void endRecord() throws IOException {
 
-    }
+  }
 
-    @Override
-    public void abort() throws IOException {
+  @Override
+  public void abort() throws IOException {
 
-    }
+  }
 
-    @Override
-    public void cleanup() throws IOException {
+  @Override
+  public void cleanup() throws IOException {
 
-    }
+  }
 }

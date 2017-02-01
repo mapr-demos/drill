@@ -33,47 +33,47 @@ import java.util.List;
 @Slf4j
 public class DrillOpenTSDBTable extends DynamicDrillTable {
 
-    private final Schema schema;
+  private final Schema schema;
 
-    public DrillOpenTSDBTable(String storageEngineName, OpenTSDBStoragePlugin plugin, Schema schema, OpenTSDBScanSpec scanSpec) {
-        super(plugin, storageEngineName, scanSpec);
-        this.schema = schema;
+  public DrillOpenTSDBTable(String storageEngineName, OpenTSDBStoragePlugin plugin, Schema schema, OpenTSDBScanSpec scanSpec) {
+    super(plugin, storageEngineName, scanSpec);
+    this.schema = schema;
+  }
+
+  @Override
+  public RelDataType getRowType(final RelDataTypeFactory typeFactory) {
+
+    List<String> names = Lists.newArrayList();
+    List<RelDataType> types = Lists.newArrayList();
+
+    try {
+      convertToRelDataType(typeFactory, names, types);
+    } catch (IOException e) {
+      e.printStackTrace();
     }
 
-    @Override
-    public RelDataType getRowType(final RelDataTypeFactory typeFactory) {
+    return typeFactory.createStructType(types, names);
+  }
 
-        List<String> names = Lists.newArrayList();
-        List<RelDataType> types = Lists.newArrayList();
-
-        try {
-            convertToRelDataType(typeFactory, names, types);
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        return typeFactory.createStructType(types, names);
+  private void convertToRelDataType(RelDataTypeFactory typeFactory, List<String> names, List<RelDataType> types) throws IOException {
+    for (ColumnDTO column : schema.getColumns()) {
+      names.add(column.getColumnName());
+      RelDataType type = getSqlTypeFromOpenTSDBType(typeFactory, column.getColumnType());
+      type = typeFactory.createTypeWithNullability(type, column.isNullable());
+      types.add(type);
     }
+  }
 
-    private void convertToRelDataType(RelDataTypeFactory typeFactory, List<String> names, List<RelDataType> types) throws IOException {
-            for (ColumnDTO column : schema.getColumns()) {
-                names.add(column.getColumnName());
-                RelDataType type = getSqlTypeFromOpenTSDBType(typeFactory, column.getColumnType());
-                type = typeFactory.createTypeWithNullability(type, column.isNullable());
-                types.add(type);
-            }
+  private RelDataType getSqlTypeFromOpenTSDBType(RelDataTypeFactory typeFactory, OpenTSDBTypes type) {
+    switch (type) {
+      case STRING:
+        return typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE);
+      case DOUBLE:
+        return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+      case TIMESTAMP:
+        return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
+      default:
+        throw new UnsupportedOperationException("Unsupported type.");
     }
-
-    private RelDataType getSqlTypeFromOpenTSDBType(RelDataTypeFactory typeFactory, OpenTSDBTypes type) {
-        switch (type) {
-            case STRING:
-                return typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE);
-            case DOUBLE:
-                return typeFactory.createSqlType(SqlTypeName.DOUBLE);
-            case TIMESTAMP:
-                return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
-            default:
-                throw new UnsupportedOperationException("Unsupported type.");
-        }
-    }
+  }
 }
