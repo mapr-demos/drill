@@ -68,6 +68,10 @@ public class DrillOpenTSDBTable extends DynamicDrillTable {
         switch (type) {
             case STRING:
                 return typeFactory.createSqlType(SqlTypeName.VARCHAR, Integer.MAX_VALUE);
+            case DOUBLE:
+                return typeFactory.createSqlType(SqlTypeName.DOUBLE);
+            case TIMESTAMP:
+                return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
             default:
                 throw new UnsupportedOperationException("Unsupported type.");
         }

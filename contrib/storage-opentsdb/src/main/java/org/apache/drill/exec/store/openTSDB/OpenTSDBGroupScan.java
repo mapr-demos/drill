@@ -163,7 +163,7 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
     @Override
     public ScanStats getScanStats() {
-        long recordCount = 100000 * openTSDBWorkList.size();
+        long recordCount = 100000L * openTSDBWorkList.size();
         return new ScanStats(ScanStats.GroupScanProperty.NO_EXACT_ROW_COUNT, recordCount, 1, recordCount);
     }
 

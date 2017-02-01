@@ -46,7 +46,7 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
 
     @Override
     public Table getTable(String tableName) {
-        if (!tableNames.contains(tableName)) { // table does not exist
+        if (isTableExist(tableName)) { // table does not exist
             return null;
         }
 
@@ -56,6 +56,10 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
 
         return drillTables.get(tableName);
 
+    }
+
+    private boolean isTableExist(String tableName) {
+        return !tableNames.contains(tableName);
     }
 
     @Override

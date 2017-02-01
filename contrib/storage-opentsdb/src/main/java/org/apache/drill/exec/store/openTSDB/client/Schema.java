@@ -22,6 +22,7 @@ import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 
 // TODO: Refactor this class
@@ -33,14 +34,14 @@ public class Schema {
     public Schema() {
         columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
         columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.STRING));
+        columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.TIMESTAMP));
+        columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.DOUBLE));
         columns.add(new ColumnDTO("tags", OpenTSDBTypes.STRING));
     }
 
     // TODO: refactor this
     public List<ColumnDTO> getColumns() throws IOException {
-        return columns;
+        return Collections.unmodifiableList(columns);
     }
 
     public int getColumnCount() {

@@ -17,6 +17,7 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
+import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -40,17 +41,19 @@ import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 import org.apache.drill.exec.store.openTSDB.client.Schema;
 import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 import org.apache.drill.exec.store.openTSDB.dto.Table;
+import org.apache.drill.exec.vector.NullableFloat8Vector;
+import org.apache.drill.exec.vector.NullableTimeStampVector;
 import org.apache.drill.exec.vector.NullableVarCharVector;
 import org.apache.drill.exec.vector.ValueVector;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.text.SimpleDateFormat;
 import java.util.ArrayList;
-import java.util.Calendar;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+
+import static java.nio.charset.StandardCharsets.UTF_8;
 
 @Slf4j
 public class OpenTSDBRecordReader extends AbstractRecordReader {
@@ -58,13 +61,16 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     /**
      * openTSDB required constants for API call
      */
-    private static final String TIME = "5y-ago";
+    private static final String DEFAULT_TIME = "5y-ago";
     private static final String SUM_AGGREGATOR = "sum";
+
+    private static final String TIME = "time";
+    private static final String METRIC = "metric";
+    private static final String INTERPOLATION = "interpolation";
 
     private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
     private final OpenTSDB client;
-    private final OpenTSDBSubScan.OpenTSDBSubScanSpec scanSpec;
 
     private List<Table> tables;
 
@@ -76,8 +82,9 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
     private ImmutableList<ProjectedColumnInfo> projectedCols;
 
+    private Map<String, String> queryParameters;
+
     private static class ProjectedColumnInfo {
-        int index;
         ValueVector vv;
         ColumnDTO openTSDBColumn;
     }
@@ -85,6 +92,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     static {
         TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
                 .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
+                .put(OpenTSDBTypes.DOUBLE, MinorType.FLOAT8)
+                .put(OpenTSDBTypes.TIMESTAMP, MinorType.TIMESTAMP)
                 .build();
     }
 
@@ -92,8 +101,13 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
                                 List<SchemaPath> projectedColumns, FragmentContext context) {
         setColumns(projectedColumns);
         this.client = client;
-        scanSpec = subScanSpec;
+        queryParameters = parseFROMRowData(subScanSpec.getTableName());
         log.debug("Scan spec: {}", subScanSpec);
+    }
+
+    private Map<String, String> parseFROMRowData(String rowData) {
+        String FROMRowData = rowData.replaceAll("[()]","");
+        return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
     }
 
     @Override
@@ -119,32 +133,25 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
     private List<Table> getTablesFromDB() {
         try {
-            String tableName;
-            String aggregator;
+            String tableName =
+                queryParameters.get(METRIC);
 
-            if (scanSpec.getTableName().contains(":")) {
-                aggregator = getAggregatorFromTableName();
-                tableName = getSimpleTableName();
-            } else {
-                aggregator = SUM_AGGREGATOR;
-                tableName = scanSpec.getTableName();
-            }
+            String interpolation =
+                getProperty(INTERPOLATION, SUM_AGGREGATOR);
 
-            return client.getTable(TIME, aggregator + ":" + tableName)
-                    .execute()
-                    .body();
+            String time =
+                getProperty(TIME, DEFAULT_TIME);
+
+            return client.getTable(time, interpolation + ":" + tableName).execute().body();
         } catch (IOException e) {
             e.printStackTrace();
             return null;
         }
     }
 
-    private String getAggregatorFromTableName() {
-        return scanSpec.getTableName().substring(scanSpec.getTableName().lastIndexOf(":") + 1);
-    }
-
-    private String getSimpleTableName() {
-        return scanSpec.getTableName().substring(0, scanSpec.getTableName().lastIndexOf(":"));
+    private String getProperty(String propertyName, String defaultValue) {
+        return queryParameters.containsKey(propertyName) ?
+            queryParameters.get(propertyName) : defaultValue;
     }
 
     private int processOpenTSDBTablesData() {
@@ -223,30 +230,40 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         for (ProjectedColumnInfo pci : projectedCols) {
             switch (pci.openTSDBColumn.getColumnName()) {
                 case "metric":
-                    setColumnValue(table.getMetric(), pci);
+                    setStringColumnValue(table.getMetric(), pci);
                     break;
                 case "tags":
-                    setColumnValue(table.getTags().toString(), pci);
+                    setStringColumnValue(table.getTags().toString(), pci);
                     break;
                 case "aggregate tags":
-                    setColumnValue(table.getAggregateTags().toString(), pci);
+                    setStringColumnValue(table.getAggregateTags().toString(), pci);
                     break;
                 case "timestamp":
-                    Calendar calendar = Calendar.getInstance();
-                    calendar.setTimeInMillis(Long.parseLong(timestamp));
-                    setColumnValue(new SimpleDateFormat("HH:mm:ss:SSS").format(calendar.getTime()), pci);
+                    setTimestampColumnValue(Long.parseLong(timestamp), pci);
                     break;
                 case "aggregated value":
-                    setColumnValue(value, pci);
+                    setDoubleColumnValue(Double.parseDouble(value), pci);
                     break;
+                default:
+                    throw new UnsupportedOperationException("Unsupported type.");
             }
         }
     }
 
-    private void setColumnValue(String data, ProjectedColumnInfo pci) {
-        ByteBuffer value = ByteBuffer.wrap(data.getBytes());
+    private void setStringColumnValue(String data, ProjectedColumnInfo pci) {
+        ByteBuffer value = ByteBuffer.wrap(data.getBytes(UTF_8));
         ((NullableVarCharVector.Mutator) pci.vv.getMutator())
                 .setSafe(0, value, 0, value.remaining());
+    }
+
+    private void setTimestampColumnValue(Long data, ProjectedColumnInfo pci) {
+        ((NullableTimeStampVector.Mutator) pci.vv.getMutator())
+                .setSafe(0, data / 1000);
+    }
+
+    private void setDoubleColumnValue(Double data, ProjectedColumnInfo pci) {
+        ((NullableFloat8Vector.Mutator) pci.vv.getMutator())
+                .setSafe(0, data);
     }
 
     private void initCols(Schema schema) throws SchemaChangeException {
@@ -264,7 +281,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
                 continue;
             }
 
-            ProjectedColumnInfo pci = getProjectedColumnInfo(i, column, name, minorType);
+            ProjectedColumnInfo pci = getProjectedColumnInfo(column, name, minorType);
             pciBuilder.add(pci);
         }
         projectedCols = pciBuilder.build();
@@ -274,7 +291,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         return minorType == null;
     }
 
-    private ProjectedColumnInfo getProjectedColumnInfo(int i, ColumnDTO column, String name, MinorType minorType) throws SchemaChangeException {
+    private ProjectedColumnInfo getProjectedColumnInfo(ColumnDTO column, String name, MinorType minorType) throws SchemaChangeException {
         MajorType majorType = getMajorType(minorType);
 
         MaterializedField field =
@@ -283,7 +300,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         ValueVector vector =
                 getValueVector(minorType, majorType, field);
 
-        return getProjectedColumnInfo(i, column, vector);
+        return getProjectedColumnInfo(column, vector);
     }
 
     private void logExceptionMessage(String name, OpenTSDBTypes type) {
@@ -312,11 +329,10 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         return vector;
     }
 
-    private ProjectedColumnInfo getProjectedColumnInfo(int columnNumber, ColumnDTO column, ValueVector vector) {
+    private ProjectedColumnInfo getProjectedColumnInfo(ColumnDTO column, ValueVector vector) {
         ProjectedColumnInfo pci = new ProjectedColumnInfo();
         pci.vv = vector;
         pci.openTSDBColumn = column;
-        pci.index = columnNumber;
         return pci;
     }
 }
