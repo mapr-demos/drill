@@ -17,7 +17,6 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
-import com.google.common.base.Splitter;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
@@ -54,6 +53,7 @@ import java.util.List;
 import java.util.Map;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
 
 @Slf4j
 public class OpenTSDBRecordReader extends AbstractRecordReader {
@@ -61,8 +61,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   /**
    * openTSDB required constants for API call
    */
-  private static final String DEFAULT_TIME = "5y-ago";
-  private static final String SUM_AGGREGATOR = "sum";
+  public static final String DEFAULT_TIME = "5y-ago";
+  public static final String SUM_AGGREGATOR = "sum";
 
   private static final String TIME = "time";
   private static final String METRIC = "metric";
@@ -103,11 +103,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     this.client = client;
     queryParameters = parseFROMRowData(subScanSpec.getTableName());
     log.debug("Scan spec: {}", subScanSpec);
-  }
-
-  private Map<String, String> parseFROMRowData(String rowData) {
-    String FROMRowData = rowData.replaceAll("[()]", "");
-    return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
   }
 
   @Override
@@ -220,23 +215,20 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
       }
     }
 
-    setupDataToDrillTable(table, timestamp, value);
+    setupDataToDrillTable(table, timestamp, value, table.getTags());
   }
 
   private void setupProjectedColsIfItNull() throws SchemaChangeException {
     if (projectedCols == null) {
-      initCols(new Schema());
+      initCols(new Schema(client, queryParameters.get("metric")));
     }
   }
 
-  private void setupDataToDrillTable(Table table, String timestamp, String value) {
+  private void setupDataToDrillTable(Table table, String timestamp, String value, Map<String, String> tags) {
     for (ProjectedColumnInfo pci : projectedCols) {
       switch (pci.openTSDBColumn.getColumnName()) {
         case "metric":
           setStringColumnValue(table.getMetric(), pci);
-          break;
-        case "tags":
-          setStringColumnValue(table.getTags().toString(), pci);
           break;
         case "aggregate tags":
           setStringColumnValue(table.getAggregateTags().toString(), pci);
@@ -248,7 +240,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
           setDoubleColumnValue(Double.parseDouble(value), pci);
           break;
         default:
-          throw new UnsupportedOperationException("Unsupported type.");
+          setStringColumnValue(tags.get(pci.openTSDBColumn.getColumnName()), pci);
       }
     }
   }

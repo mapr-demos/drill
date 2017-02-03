@@ -40,6 +40,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
+
 @Slf4j
 public class OpenTSDBSchemaFactory implements SchemaFactory {
 
@@ -90,7 +92,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     public Table getTable(String name) {
       OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
       try {
-        return new DrillOpenTSDBTable(schemaName, plugin, new Schema(), scanSpec);
+        return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), parseFROMRowData(name).get("metric")), scanSpec);
       } catch (Exception e) {
         logger.warn("Failure while retrieving openTSDB table {}", name, e);
         return null;
