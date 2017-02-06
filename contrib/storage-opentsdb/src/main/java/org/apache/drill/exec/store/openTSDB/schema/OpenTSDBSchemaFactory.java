@@ -91,12 +91,24 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public Table getTable(String name) {
       OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
+      name = validateTableName(name);
       try {
-        return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), parseFROMRowData(name).get("metric")), scanSpec);
+        return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
       } catch (Exception e) {
         logger.warn("Failure while retrieving openTSDB table {}", name, e);
         return null;
       }
+    }
+
+    private String validateTableName(String name) {
+      if (!isTableNameValid(name)) {
+        name = parseFROMRowData(name).get("metric");
+      }
+      return name;
+    }
+
+    private boolean isTableNameValid(String name) {
+      return !name.contains("=");
     }
 
     @Override
