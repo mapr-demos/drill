@@ -49,11 +49,13 @@ import org.apache.drill.exec.vector.ValueVector;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.drill.exec.store.openTSDB.Util.isTableNameValid;
 import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
 
 @Slf4j
@@ -102,8 +104,17 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
                               List<SchemaPath> projectedColumns, FragmentContext context) {
     setColumns(projectedColumns);
     this.client = client;
-    queryParameters = parseFROMRowData(subScanSpec.getTableName());
+    setupQueryParam(subScanSpec.getTableName());
     log.debug("Scan spec: {}", subScanSpec);
+  }
+
+  private void setupQueryParam(String data) {
+    if (!isTableNameValid(data)) {
+      queryParameters = parseFROMRowData(data);
+    } else {
+      queryParameters = new HashMap<>();
+      queryParameters.put(METRIC, data);
+    }
   }
 
   @Override

@@ -25,4 +25,16 @@ public class Util {
     String FROMRowData = rowData.replaceAll("[()]", "");
     return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
   }
+
+  public static String validateTableName(String name) {
+    if (!isTableNameValid(name)) {
+      name = parseFROMRowData(name).get("metric");
+    }
+    return name;
+  }
+
+  public static boolean isTableNameValid(String name) {
+    return !name.contains("=");
+  }
+
 }

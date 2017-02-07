@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
+import static org.apache.drill.exec.store.openTSDB.Util.validateTableName;
 
 @Slf4j
 public class OpenTSDBSchemaFactory implements SchemaFactory {
@@ -98,17 +98,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
         logger.warn("Failure while retrieving openTSDB table {}", name, e);
         return null;
       }
-    }
-
-    private String validateTableName(String name) {
-      if (!isTableNameValid(name)) {
-        name = parseFROMRowData(name).get("metric");
-      }
-      return name;
-    }
-
-    private boolean isTableNameValid(String name) {
-      return !name.contains("=");
     }
 
     @Override
