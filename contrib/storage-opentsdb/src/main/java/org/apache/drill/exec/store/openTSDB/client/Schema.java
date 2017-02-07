@@ -29,9 +29,33 @@ import java.util.List;
 import static org.apache.drill.exec.store.openTSDB.OpenTSDBRecordReader.DEFAULT_TIME;
 import static org.apache.drill.exec.store.openTSDB.OpenTSDBRecordReader.SUM_AGGREGATOR;
 
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATED_VALUE;
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATE_TAGS;
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.METRIC;
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.TIMESTAMP;
+
 // TODO: Refactor this class
 @Slf4j
 public class Schema {
+
+  enum DefaultColumns {
+
+    METRIC("metric"),
+    TIMESTAMP("timestamp"),
+    AGGREGATE_TAGS("aggregate tags"),
+    AGGREGATED_VALUE("aggregated value");
+
+    private String columnName;
+
+    DefaultColumns(String name) {
+      this.columnName = name;
+    }
+
+    @Override
+    public String toString() {
+      return columnName;
+    }
+  }
 
   private final List<ColumnDTO> columns = new ArrayList<>();
   private final OpenTSDB client;
@@ -49,10 +73,11 @@ public class Schema {
   }
 
   private void setupStructure() {
-    columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
-    columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
-    columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.TIMESTAMP));
-    columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.DOUBLE));
+    columns.add(new ColumnDTO(METRIC.toString(), OpenTSDBTypes.STRING));
+    columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
+    columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
+    columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
+
     List<Table> res = null;
     try {
       res = client.getTable(DEFAULT_TIME, SUM_AGGREGATOR + ":" + metricName).execute().body();
