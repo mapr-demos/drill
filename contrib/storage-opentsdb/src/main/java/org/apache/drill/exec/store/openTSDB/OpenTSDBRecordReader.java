@@ -24,6 +24,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
+import org.apache.drill.common.logical.ValidationError;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.types.TypeProtos.MajorType;
 import org.apache.drill.common.types.TypeProtos.MinorType;
@@ -112,6 +113,9 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
     addColumnsNames();
     tables = getTablesFromDB();
+    if (tables == null) {
+      throw new ValidationError(String.format("Table '%s' not found", queryParameters.get(METRIC)));
+    }
   }
 
   @Override
