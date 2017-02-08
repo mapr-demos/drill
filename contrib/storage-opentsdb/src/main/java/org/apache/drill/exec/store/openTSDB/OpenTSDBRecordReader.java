@@ -49,6 +49,7 @@ import org.apache.drill.exec.vector.ValueVector;
 import java.io.IOException;
 import java.nio.ByteBuffer;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.HashMap;
 import java.util.Iterator;
 import java.util.List;
@@ -69,7 +70,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private static final String TIME = "time";
   private static final String METRIC = "metric";
-  private static final String INTERPOLATION = "interpolation";
+  private static final String AGGREGATOR = "aggregator";
 
   private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
@@ -124,8 +125,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
     addColumnsNames();
     tables = getTablesFromDB();
-    if (tables == null) {
-      throw new ValidationError(String.format("Table '%s' not found", queryParameters.get(METRIC)));
+    if (tables == null || tables.isEmpty()) {
+      throw new ValidationError(String.format("Table '%s' not found or it's empty", queryParameters.get(METRIC)));
     }
   }
 
@@ -144,20 +145,23 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private List<Table> getTablesFromDB() {
     try {
-      String tableName =
-          queryParameters.get(METRIC);
-
-      String interpolation =
-          getProperty(INTERPOLATION, SUM_AGGREGATOR);
-
       String time =
           getProperty(TIME, DEFAULT_TIME);
-
-      return client.getTable(time, interpolation + ":" + tableName).execute().body();
+      return client.getTable(time, generateQuery()).execute().body();
     } catch (IOException e) {
       e.printStackTrace();
-      return null;
+      return Collections.emptyList();
     }
+  }
+
+  private String generateQuery() {
+    String tableName =
+        queryParameters.get(METRIC);
+
+    String aggregator =
+        getProperty(AGGREGATOR, SUM_AGGREGATOR);
+
+    return aggregator + ":" + tableName;
   }
 
   private String getProperty(String propertyName, String defaultValue) {
