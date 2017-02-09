@@ -67,7 +67,6 @@ public class Schema {
     setupStructure();
   }
 
-  // TODO: refactor this
   public List<ColumnDTO> getColumns() throws IOException {
     return Collections.unmodifiableList(columns);
   }

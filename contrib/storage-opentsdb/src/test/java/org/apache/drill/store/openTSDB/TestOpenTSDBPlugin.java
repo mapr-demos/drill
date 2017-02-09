@@ -27,19 +27,22 @@ import static org.apache.drill.store.openTSDB.TestTableGenerator.setupTestData;
 @Ignore("requires a remote openTSDB server to run.")
 public class TestOpenTSDBPlugin extends BaseTestQuery {
 
+  private static TestBase base;
+
   @BeforeClass
   public static void addTestDataToDB() throws Exception {
     setupTestData();
+    base = new TestBase();
   }
 
   @Test
   public void testBasicQueryFROMWithTableName() throws Exception {
-    test("select * from openTSDB.`warp.speed.test`");
+    base.runSQLVerifyCount("select * from openTSDB.`warp.speed.test`", 14);
   }
 
   @Test
   public void testBasicQueryFROMWithRequiredParams() throws Exception {
-    test("select * from openTSDB.`(metric=warp.speed.test)`");
+    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test)`", 14);
   }
 
   @Test

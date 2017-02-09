@@ -106,6 +106,21 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
     }
 
     @Override
+    public boolean equals(Object o) {
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
+
+      OpenTSDBWork that = (OpenTSDBWork) o;
+
+      return byteMap != null ? byteMap.equals(that.byteMap) : that.byteMap == null;
+    }
+
+    @Override
+    public int hashCode() {
+      return byteMap != null ? byteMap.hashCode() : 0;
+    }
+
+    @Override
     public int compareTo(CompleteWork o) {
       return 0;
     }

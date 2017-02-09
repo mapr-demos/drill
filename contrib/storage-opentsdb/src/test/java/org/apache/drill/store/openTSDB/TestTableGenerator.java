@@ -54,9 +54,11 @@ class TestTableGenerator {
   private static void readAndSendDataToDB(BufferedReader br) throws IOException {
     String line;
     while ((line = br.readLine()) != null) {
-      System.out.println(line);
-      pw.println(line);
-      pw.flush();
+      if (!line.contains("*")) {
+        System.out.println(line);
+        pw.println(line);
+        pw.flush();
+      }
     }
     System.out.println();
     br.close();
