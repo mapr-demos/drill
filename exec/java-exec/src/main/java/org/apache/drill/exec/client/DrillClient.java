@@ -79,6 +79,7 @@ import org.apache.drill.exec.rpc.DrillRpcFuture;
 import org.apache.drill.exec.rpc.NamedThreadFactory;
 import org.apache.drill.exec.rpc.RpcConnectionHandler;
 import org.apache.drill.exec.rpc.RpcException;
+import org.apache.drill.exec.rpc.InvalidConnectionInfoException;
 import org.apache.drill.exec.rpc.TransportCheck;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
 import org.apache.drill.exec.rpc.user.UserClient;
@@ -223,19 +224,101 @@ public class DrillClient implements Closeable, ConnectionThrottle {
     connect(null, props);
   }
 
+  /**
+   * Populates the endpointlist with drillbits information provided in the connection string by client.
+   * For direct connection we can have connection string with drillbit property as below:
+   * <dl>
+   *   <dt>drillbit=ip</dt>
+   *   <dd>use the ip specified as the Foreman ip with default port in config file</dd>
+   *   <dt>drillbit=ip:port</dt>
+   *   <dd>use the ip and port specified as the Foreman ip and port</dd>
+   *   <dt>drillbit=ip1:port1,ip2:port2,...</dt>
+   *   <dd>randomly select the ip and port pair from the specified list as the Foreman ip and port.</dd>
+   * </dl>
+   *
+   * @param drillbits string with drillbit value provided in connection string
+   * @param defaultUserPort string with default userport of drillbit specified in config file
+   * @return list of drillbit endpoints parsed from connection string
+   * @throws InvalidConnectionInfoException if the connection string has invalid or no drillbit information
+   */
+  static List<DrillbitEndpoint> parseAndVerifyEndpoints(String drillbits, String defaultUserPort)
+                                throws InvalidConnectionInfoException {
+    // If no drillbits is provided then throw exception
+    drillbits = drillbits.trim();
+    if (drillbits.isEmpty()) {
+      throw new InvalidConnectionInfoException("No drillbit information specified in the connection string");
+    }
+
+    final List<DrillbitEndpoint> endpointList = new ArrayList<>();
+    final String[] connectInfo = drillbits.split(",");
+
+    // Fetch ip address and port information for each drillbit and populate the list
+    for (String drillbit : connectInfo) {
+
+      // Trim all the empty spaces and check if the entry is empty string.
+      // Ignore the empty ones.
+      drillbit = drillbit.trim();
+
+      if (!drillbit.isEmpty()) {
+        // Verify if we have only ":" or only ":port" pattern
+        if (drillbit.charAt(0) == ':') {
+          // Invalid drillbit information
+          throw new InvalidConnectionInfoException("Malformed connection string with drillbit hostname or " +
+                                                     "hostaddress missing for an entry: " + drillbit);
+        }
+
+        // We are now sure that each ip:port entry will have both the values atleast once.
+        // Split each drillbit connection string to get ip address and port value
+        final String[] drillbitInfo = drillbit.split(":");
+
+        // Check if we have more than one port
+        if (drillbitInfo.length > 2) {
+          throw new InvalidConnectionInfoException("Malformed connection string with more than one port in a " +
+                                                     "drillbit entry: " + drillbit);
+        }
+
+        // At this point we are sure that drillbitInfo has atleast hostname or host address
+        // trim all the empty spaces which might be present in front of hostname or
+        // host address information
+        final String ipAddress = drillbitInfo[0].trim();
+        String port = defaultUserPort;
+
+        if (drillbitInfo.length == 2) {
+          // We have a port value also given by user. trim all the empty spaces between : and port value before
+          // validating the correctness of value.
+          port = drillbitInfo[1].trim();
+        }
+
+        try {
+          final DrillbitEndpoint endpoint = DrillbitEndpoint.newBuilder()
+                                            .setAddress(ipAddress)
+                                            .setUserPort(Integer.parseInt(port))
+                                            .build();
+
+          endpointList.add(endpoint);
+        } catch (NumberFormatException e) {
+          throw new InvalidConnectionInfoException("Malformed port value in entry: " + ipAddress + ":" + port + " " +
+                                                     "passed in connection string");
+        }
+      }
+    }
+    if (endpointList.size() == 0) {
+      throw new InvalidConnectionInfoException("No valid drillbit information specified in the connection string");
+    }
+    return endpointList;
+  }
+
   public synchronized void connect(String connect, Properties props) throws RpcException {
     if (connected) {
       return;
     }
 
-    final DrillbitEndpoint endpoint;
+    final List<DrillbitEndpoint> endpoints = new ArrayList<>();
+
     if (isDirectConnection) {
-      final String[] connectInfo = props.getProperty("drillbit").split(":");
-      final String port = connectInfo.length==2?connectInfo[1]:config.getString(ExecConstants.INITIAL_USER_PORT);
-      endpoint = DrillbitEndpoint.newBuilder()
-              .setAddress(connectInfo[0])
-              .setUserPort(Integer.parseInt(port))
-              .build();
+      // Populate the endpoints list with all the drillbit information provided in the connection string
+      endpoints.addAll(parseAndVerifyEndpoints(props.getProperty("drillbit"),
+                                               config.getString(ExecConstants.INITIAL_USER_PORT)));
     } else {
       if (ownsZkConnection) {
         try {
@@ -245,13 +328,13 @@ public class DrillClient implements Closeable, ConnectionThrottle {
           throw new RpcException("Failure setting up ZK for client.", e);
         }
       }
-
-      final ArrayList<DrillbitEndpoint> endpoints = new ArrayList<>(clusterCoordinator.getAvailableEndpoints());
-      checkState(!endpoints.isEmpty(), "No DrillbitEndpoint can be found");
-      // shuffle the collection then get the first endpoint
-      Collections.shuffle(endpoints);
-      endpoint = endpoints.iterator().next();
+      endpoints.addAll(clusterCoordinator.getAvailableEndpoints());
+      // Make sure we have at least one endpoint in the list
+      checkState(!endpoints.isEmpty(), "No active Drillbit endpoint found from ZooKeeper");
     }
+
+    // shuffle the collection then get the first endpoint
+    Collections.shuffle(endpoints);
 
     if (props != null) {
       final UserProperties.Builder upBuilder = UserProperties.newBuilder();
@@ -274,10 +357,54 @@ public class DrillClient implements Closeable, ConnectionThrottle {
         super.afterExecute(r, t);
       }
     };
-    client = new UserClient(clientName, config, supportComplexTypes, allocator, eventLoopGroup, executor);
-    logger.debug("Connecting to server {}:{}", endpoint.getAddress(), endpoint.getUserPort());
-    connect(endpoint);
-    connected = true;
+
+    // "tries" is max number of unique drillbit to try connecting until successfully connected to one of them
+    final String connectTriesConf = (props != null) ? props.getProperty("tries", "5") : "5";
+
+    int connectTriesVal;
+    try {
+      connectTriesVal = Math.min(endpoints.size(), Integer.parseInt(connectTriesConf));
+    } catch (NumberFormatException e) {
+      throw new InvalidConnectionInfoException("Invalid tries value: " + connectTriesConf + " specified in " +
+                                               "connection string");
+    }
+
+    // If the value provided in the connection string is <=0 then override with 1 since we want to try connecting
+    // at least once
+    connectTriesVal = Math.max(1, connectTriesVal);
+
+    int triedEndpointIndex = 0;
+    DrillbitEndpoint endpoint;
+
+    while (triedEndpointIndex < connectTriesVal) {
+      client = new UserClient(clientName, config, supportComplexTypes, allocator, eventLoopGroup, executor);
+      endpoint = endpoints.get(triedEndpointIndex);
+      logger.debug("Connecting to server {}:{}", endpoint.getAddress(), endpoint.getUserPort());
+
+      try {
+        connect(endpoint);
+        connected = true;
+        logger.info("Successfully connected to server {}:{}", endpoint.getAddress(), endpoint.getUserPort());
+        break;
+      } catch (InvalidConnectionInfoException ex) {
+        logger.error("Connection to {}:{} failed with error {}. Not retrying anymore", endpoint.getAddress(),
+                     endpoint.getUserPort(), ex.getMessage());
+        throw ex;
+      } catch (RpcException ex) {
+        ++triedEndpointIndex;
+        logger.error("Attempt {}: Failed to connect to server {}:{}", triedEndpointIndex, endpoint.getAddress(),
+                     endpoint.getUserPort());
+
+        // Throw exception when we have exhausted all the tries without having a successful connection
+        if (triedEndpointIndex == connectTriesVal) {
+          throw ex;
+        }
+
+        // Close the connection here to avoid calling close twice in case when all tries are exhausted.
+        // Since DrillClient.close is also calling client.close
+        client.close();
+      }
+    }
   }
 
   protected static EventLoopGroup createEventLoop(int size, String prefix) {

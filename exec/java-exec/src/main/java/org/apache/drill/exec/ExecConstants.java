@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -44,6 +44,7 @@ public interface ExecConstants {
   String BIT_TIMEOUT = "drill.exec.bit.timeout" ;
   String SERVICE_NAME = "drill.exec.cluster-id";
   String INITIAL_BIT_PORT = "drill.exec.rpc.bit.server.port";
+  String INITIAL_DATA_PORT = "drill.exec.rpc.bit.server.dataport";
   String BIT_RPC_TIMEOUT = "drill.exec.rpc.bit.timeout";
   String INITIAL_USER_PORT = "drill.exec.rpc.user.server.port";
   String USER_RPC_TIMEOUT = "drill.exec.rpc.user.timeout";
@@ -115,9 +116,9 @@ public interface ExecConstants {
    * Configuration properties connected with dynamic UDFs support
    */
   String UDF_RETRY_ATTEMPTS = "drill.exec.udf.retry-attempts";
+  String UDF_DIRECTORY_LOCAL = "drill.exec.udf.directory.local";
   String UDF_DIRECTORY_FS = "drill.exec.udf.directory.fs";
   String UDF_DIRECTORY_ROOT = "drill.exec.udf.directory.root";
-  String UDF_DIRECTORY_LOCAL = "drill.exec.udf.directory.local";
   String UDF_DIRECTORY_STAGING = "drill.exec.udf.directory.staging";
   String UDF_DIRECTORY_REGISTRY = "drill.exec.udf.directory.registry";
   String UDF_DIRECTORY_TMP = "drill.exec.udf.directory.tmp";
@@ -126,6 +127,11 @@ public interface ExecConstants {
    * Local temporary directory is used as base for temporary storage of Dynamic UDF jars.
    */
   String DRILL_TMP_DIR = "drill.tmp-dir";
+
+  /**
+   * Temporary tables can be created ONLY in default temporary workspace.
+   */
+  String DEFAULT_TEMPORARY_WORKSPACE = "drill.exec.default_temporary_workspace";
 
   String OUTPUT_FORMAT_OPTION = "store.format";
   OptionValidator OUTPUT_FORMAT_VALIDATOR = new StringValidator(OUTPUT_FORMAT_OPTION, "parquet");
@@ -309,7 +315,6 @@ public interface ExecConstants {
   OptionValidator ENABLE_NEW_TEXT_READER = new BooleanValidator(ENABLE_NEW_TEXT_READER_KEY, true);
 
   String BOOTSTRAP_STORAGE_PLUGINS_FILE = "bootstrap-storage-plugins.json";
-  String MAX_LOADING_CACHE_SIZE_CONFIG = "drill.exec.compile.cache_max_size";
 
   String DRILL_SYS_FILE_SUFFIX = ".sys.drill";
 

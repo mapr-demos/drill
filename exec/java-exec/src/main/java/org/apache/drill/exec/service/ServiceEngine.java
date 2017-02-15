@@ -30,6 +30,7 @@ import java.util.concurrent.TimeUnit;
 
 import org.apache.drill.common.AutoCloseables;
 import org.apache.drill.common.config.DrillConfig;
+import org.apache.drill.common.util.DrillVersionInfo;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.exception.DrillbitStartupException;
 import org.apache.drill.exec.memory.BufferAllocator;
@@ -140,15 +141,25 @@ public class ServiceEngine implements AutoCloseable {
         name, context.getConfig().getLong(initReservation), context.getConfig().getLong(maxAllocation));
   }
 
+  private String getHostName() throws UnknownHostException{
+    // DRILL_HOST_NAME sets custom host name.  See drill-env.sh for details.
+    String customHost = System.getenv("DRILL_HOST_NAME");
+    if (customHost != null) {
+      return customHost;
+    }
+    return useIP ? InetAddress.getLocalHost().getHostAddress() : InetAddress.getLocalHost().getCanonicalHostName();
+  }
+
   public DrillbitEndpoint start() throws DrillbitStartupException, UnknownHostException{
     int userPort = userServer.bind(config.getInt(ExecConstants.INITIAL_USER_PORT), allowPortHunting);
-    String address = useIP ?  InetAddress.getLocalHost().getHostAddress() : InetAddress.getLocalHost().getCanonicalHostName();
+    String address = getHostName();
     checkLoopbackAddress(address);
 
     DrillbitEndpoint partialEndpoint = DrillbitEndpoint.newBuilder()
         .setAddress(address)
         //.setAddress("localhost")
         .setUserPort(userPort)
+        .setVersion(DrillVersionInfo.getVersion())
         .build();
 
     partialEndpoint = controller.start(partialEndpoint);

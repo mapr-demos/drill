@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -30,6 +30,7 @@ import java.util.List;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 
+import org.apache.drill.DrillTestWrapper.TestServices;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.scanner.ClassPathScanner;
@@ -84,6 +85,7 @@ public class BaseTestQuery extends ExecTest {
     {
       put(ExecConstants.SYS_STORE_PROVIDER_LOCAL_ENABLE_WRITE, "false");
       put(ExecConstants.HTTP_ENABLE, "false");
+      put(ExecConstants.DEFAULT_TEMPORARY_WORKSPACE, TEMP_SCHEMA);
     }
   };
 
@@ -248,8 +250,26 @@ public class BaseTestQuery extends ExecTest {
     return testBuilder();
   }
 
+
+  public static class ClassicTestServices implements TestServices {
+    @Override
+    public BufferAllocator allocator() {
+      return allocator;
+    }
+
+    @Override
+    public void test(String query) throws Exception {
+      BaseTestQuery.test(query);
+    }
+
+    @Override
+    public List<QueryDataBatch> testRunAndReturn(final QueryType type, final Object query) throws Exception {
+      return BaseTestQuery.testRunAndReturn(type, query);
+    }
+  }
+
   public static TestBuilder testBuilder() {
-    return new TestBuilder(allocator);
+    return new TestBuilder(new ClassicTestServices());
   }
 
   @AfterClass
@@ -307,7 +327,7 @@ public class BaseTestQuery extends ExecTest {
       Preconditions.checkArgument(query instanceof String, "Expected a string as input query");
       query = QueryTestUtil.normalizeQuery((String)query);
       return client.runQuery(type, (String)query);
-  }
+    }
   }
 
   public static List<QueryDataBatch> testPreparedStatement(PreparedStatementHandle handle) throws Exception {

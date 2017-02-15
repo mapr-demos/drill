@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -81,7 +81,7 @@ public abstract class RemoteConnection implements ConnectionThrottle, AutoClosea
   }
 
   public boolean isActive() {
-    return channel.isActive();
+    return (channel != null) && channel.isActive();
   }
 
   /**
@@ -176,18 +176,37 @@ public abstract class RemoteConnection implements ConnectionThrottle, AutoClosea
   }
 
   /**
+   * Closes all resources connected with current session.
+   * By default has no implementation.
+   */
+  public void closeSession() {
+  }
+
+  /**
    * Connection consumer wants to close connection. Initiate connection close
    * and complete. This is a blocking call that ensures that the connection is
    * closed before returning. As part of this call, the channel close handler
    * will be triggered which will call channelClosed() above. The latter will
    * happen in a separate thread while this method is blocking.
+   *
+   * <p>
+   *   The check for isActive is not required here since channel can be in OPEN state without being active. We want
+   *   to close in both the scenarios. A channel is in OPEN state when a socket is created for it before binding to an
+   *   address.
+   *   <li>
+   *      For connection oriented transport protocol channel moves to ACTIVE state when a connection is established
+   *      using this channel. We need to have channel in ACTIVE state NOT OPEN before we can send any message to
+   *      remote endpoint.
+   *   </li>
+   *   <li>
+   *      For connectionless transport protocol a sender can send data as soon as channel moves to OPEN state.
+   *   </li>
+   * </p>
    */
   @Override
   public void close() {
     try {
-      if (channel.isActive()) {
-        channel.close().get();
-      }
+      channel.close().get();
     } catch (final InterruptedException | ExecutionException e) {
       logger.warn("Caught exception while closing channel.", e);
 

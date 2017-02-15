@@ -106,8 +106,10 @@
   <p>STATE: ${model.getProfile().getState().name()}</p>
   <p>FOREMAN: ${model.getProfile().getForeman().getAddress()}</p>
   <p>TOTAL FRAGMENTS: ${model.getProfile().getTotalFragments()}</p>
+  <p>DURATION: ${model.getProfileDuration()}</p>
 
-  <#if (model.getOptionList()?size > 0)>
+  <#assign options = model.getOptions()>
+  <#if (options?keys?size > 0)>
     <div class="page-header"></div>
     <h3>Session Options</h3>
     <div class="panel-group" id="session-options-accordion">
@@ -129,10 +131,10 @@
                 </tr>
               </thead>
               <tbody>
-                <#list model.getOptionList() as option>
+                <#list options?keys as name>
                   <tr>
-                    <td>${option.getName()}</td>
-                    <td>${option.getValue()?c}</td>
+                    <td>${name}</td>
+                    <td>${options[name]}</td>
                   </tr>
                 </#list>
               </tbody>

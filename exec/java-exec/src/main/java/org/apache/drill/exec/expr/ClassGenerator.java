@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -19,6 +19,7 @@ package org.apache.drill.exec.expr;
 
 import static org.apache.drill.exec.compile.sig.GeneratorMapping.GM;
 
+import java.lang.reflect.Constructor;
 import java.lang.reflect.Modifier;
 import java.util.LinkedList;
 import java.util.List;
@@ -42,6 +43,7 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.sun.codemodel.JBlock;
+import com.sun.codemodel.JCatchBlock;
 import com.sun.codemodel.JClass;
 import com.sun.codemodel.JClassAlreadyExistsException;
 import com.sun.codemodel.JCodeModel;
@@ -53,6 +55,7 @@ import com.sun.codemodel.JInvocation;
 import com.sun.codemodel.JLabel;
 import com.sun.codemodel.JMethod;
 import com.sun.codemodel.JMod;
+import com.sun.codemodel.JTryBlock;
 import com.sun.codemodel.JType;
 import com.sun.codemodel.JVar;
 import org.apache.drill.exec.server.options.OptionManager;
@@ -87,7 +90,9 @@ public class ClassGenerator<T>{
   }
 
   @SuppressWarnings("unchecked")
-  ClassGenerator(CodeGenerator<T> codeGenerator, MappingSet mappingSet, SignatureHolder signature, EvaluationVisitor eval, JDefinedClass clazz, JCodeModel model, OptionManager optionManager) throws JClassAlreadyExistsException {
+  ClassGenerator(CodeGenerator<T> codeGenerator, MappingSet mappingSet, SignatureHolder signature,
+                 EvaluationVisitor eval, JDefinedClass clazz, JCodeModel model,
+                 OptionManager optionManager) throws JClassAlreadyExistsException {
     this.codeGenerator = codeGenerator;
     this.clazz = clazz;
     this.mappings = mappingSet;
@@ -103,8 +108,19 @@ public class ClassGenerator<T>{
     rotateBlock();
 
     for (SignatureHolder child : signature.getChildHolders()) {
-      String innerClassName = child.getSignatureClass().getSimpleName();
-      JDefinedClass innerClazz = clazz._class(Modifier.FINAL + Modifier.PRIVATE, innerClassName);
+      Class<?> innerClass = child.getSignatureClass();
+      String innerClassName = innerClass.getSimpleName();
+
+      // Create the inner class as private final. If the template (super) class
+      // is static, then make the subclass static as well. Note the conversion
+      // from the JDK Modifier values to the JCodeModel JMod values: the
+      // values are different.
+
+      int mods = JMod.PRIVATE + JMod.FINAL;
+      if ((innerClass.getModifiers() & Modifier.STATIC) != 0) {
+        mods += JMod.STATIC;
+      }
+      JDefinedClass innerClazz = clazz._class(mods, innerClassName);
       innerClasses.put(innerClassName, new ClassGenerator<>(codeGenerator, mappingSet, child, eval, innerClazz, model, optionManager));
     }
   }
@@ -171,7 +187,7 @@ public class ClassGenerator<T>{
   }
 
   public JVar declareVectorValueSetupAndMember(String batchName, TypedFieldId fieldId) {
-    return declareVectorValueSetupAndMember( DirectExpression.direct(batchName), fieldId);
+    return declareVectorValueSetupAndMember(DirectExpression.direct(batchName), fieldId);
   }
 
   public JVar declareVectorValueSetupAndMember(DirectExpression batchName, TypedFieldId fieldId) {
@@ -202,26 +218,30 @@ public class ClassGenerator<T>{
 
     JInvocation invoke = batchName
         .invoke("getValueAccessorById") //
-        .arg( vvClass.dotclass())
+        .arg(vvClass.dotclass())
         .arg(fieldArr);
 
-    JVar obj = b.decl( //
-        objClass, //
-        getNextVar("tmp"), //
+    JVar obj = b.decl(
+        objClass,
+        getNextVar("tmp"),
         invoke.invoke(vectorAccess));
 
     b._if(obj.eq(JExpr._null()))._then()._throw(JExpr._new(t).arg(JExpr.lit(String.format("Failure while loading vector %s with id: %s.", vv.name(), fieldId.toString()))));
-    //b.assign(vv, JExpr.cast(retClass, ((JExpression) JExpr.cast(wrapperClass, obj) ).invoke(vectorAccess)));
-    b.assign(vv, JExpr.cast(retClass, obj ));
+    //b.assign(vv, JExpr.cast(retClass, ((JExpression) JExpr.cast(wrapperClass, obj)).invoke(vectorAccess)));
+    b.assign(vv, JExpr.cast(retClass, obj));
     vvDeclaration.put(setup, vv);
 
     return vv;
   }
 
   public enum BlkCreateMode {
-    TRUE,  // Create new block
-    FALSE, // Do not create block; put into existing block.
-    TRUE_IF_BOUND // Create new block only if # of expressions added hit upper-bound (ExecConstants.CODE_GEN_EXP_IN_METHOD_SIZE)
+    /** Create new block */
+    TRUE,
+    /** Do not create block; put into existing block. */
+    FALSE,
+    /** Create new block only if # of expressions added hit upper-bound
+     * ({@link ExecConstants#CODE_GEN_EXP_IN_METHOD_SIZE}). */
+    TRUE_IF_BOUND
   }
 
   public HoldingContainer addExpr(LogicalExpression ex) {
@@ -245,6 +265,13 @@ public class ClassGenerator<T>{
     // default behavior is always to create new block.
     rotateBlock(BlkCreateMode.TRUE);
   }
+
+  /**
+   * Create a new code block, closing the current block.
+   *
+   * @param mode the {@link BlkCreateMode block create mode}
+   * for the new block.
+   */
 
   private void rotateBlock(BlkCreateMode mode) {
     boolean blockRotated = false;
@@ -361,7 +388,129 @@ public class ClassGenerator<T>{
     return this.workspaceVectors;
   }
 
-  private static class ValueVectorSetup{
+  /**
+   * Prepare the generated class for use as a plain-old Java class
+   * (to be compiled by a compiler and directly loaded without a
+   * byte-code merge. Three additions are necessary:
+   * <ul>
+   * <li>The class must extend its template as we won't merge byte
+   * codes.</li>
+   * <li>A constructor is required to call the <tt>__DRILL_INIT__</tt>
+   * method. If this is a nested class, then the constructor must
+   * include parameters defined by the base class.</li>
+   * <li>For each nested class, create a method that creates an
+   * instance of that nested class using a well-defined name. This
+   * method overrides the base class method defined for this purpose.</li>
+   */
+
+  public void preparePlainJava() {
+
+    // If this generated class uses the "straight Java" technique
+    // (no byte code manipulation), then the class must extend the
+    // template so it plays by normal Java rules for finding the
+    // template methods via inheritance rather than via code injection.
+
+    Class<?> baseClass = sig.getSignatureClass();
+    clazz._extends(baseClass);
+
+    // Create a constuctor for the class: either a default one,
+    // or (for nested classes) one that passes along arguments to
+    // the super class constructor.
+
+    Constructor<?>[] ctors = baseClass.getConstructors();
+    for (Constructor<?> ctor : ctors) {
+      addCtor(ctor.getParameterTypes());
+    }
+
+    // Some classes have no declared constructor, but we need to generate one
+    // anyway.
+
+    if ( ctors.length == 0 ) {
+      addCtor( new Class<?>[] {} );
+    }
+
+    // Repeat for inner classes.
+
+    for(ClassGenerator<T> child : innerClasses.values()) {
+      child.preparePlainJava();
+
+      // If there are inner classes, then we need to generate a "shim" method
+      // to instantiate that class.
+      //
+      // protected TemplateClass.TemplateInnerClass newTemplateInnerClass( args... ) {
+      //    return new GeneratedClass.GeneratedInnerClass( args... );
+      // }
+      //
+      // The name is special, it is "new" + inner class name. The template must
+      // provide a method of this name that creates the inner class instance.
+
+      String innerClassName = child.clazz.name();
+      JMethod shim = clazz.method(JMod.PROTECTED, child.sig.getSignatureClass(), "new" + innerClassName);
+      JInvocation childNew = JExpr._new(child.clazz);
+      Constructor<?>[] childCtors = child.sig.getSignatureClass().getConstructors();
+      Class<?>[] params;
+      if (childCtors.length==0) {
+        params = new Class<?>[0];
+      } else {
+        params = childCtors[0].getParameterTypes();
+      }
+      for (int i = 1; i < params.length; i++) {
+        Class<?> p = params[i];
+        childNew.arg(shim.param(model._ref(p), "arg" + i));
+      }
+      shim.body()._return(childNew);
+    }
+  }
+
+  /**
+   * The code generator creates a method called __DRILL_INIT__ which takes the
+   * place of the constructor when the code goes though the byte code merge.
+   * For Plain-old Java, we call the method from a constructor created for
+   * that purpose. (Generated code, fortunately, never includes a constructor,
+   * so we can create one.) Since the init block throws an exception (which
+   * should never occur), the generated constructor converts the checked
+   * exception into an unchecked one so as to not require changes to the
+   * various places that create instances of the generated classes.
+   *
+   * Example:<code><pre>
+   * public StreamingAggregatorGen1() {
+   *       try {
+   *         __DRILL_INIT__();
+   *     } catch (SchemaChangeException e) {
+   *         throw new UnsupportedOperationException(e);
+   *     }
+   * }</pre></code>
+   *
+   * Note: in Java 8 we'd use the <tt>Parameter</tt> class defined in Java's
+   * introspection package. But, Drill prefers Java 7 which only provides
+   * parameter types.
+   */
+
+  private void addCtor(Class<?>[] parameters) {
+    JMethod ctor = clazz.constructor(JMod.PUBLIC);
+    JBlock body = ctor.body();
+
+    // If there are parameters, need to pass them to the super class.
+    if (parameters.length > 0) {
+      JInvocation superCall = JExpr.invoke("super");
+
+      // This case only occurs for nested classes, and all nested classes
+      // in Drill are inner classes. Don't pass along the (hidden)
+      // this$0 field.
+
+      for (int i = 1; i < parameters.length; i++) {
+        Class<?> p = parameters[i];
+        superCall.arg(ctor.param(model._ref(p), "arg" + i));
+      }
+      body.add(superCall);
+    }
+    JTryBlock tryBlock = body._try();
+    tryBlock.body().invoke(SignatureHolder.DRILL_INIT_METHOD);
+    JCatchBlock catchBlock = tryBlock._catch(model.ref(SchemaChangeException.class));
+    catchBlock.body()._throw(JExpr._new(model.ref(UnsupportedOperationException.class)).arg(catchBlock.param("e")));
+  }
+
+  private static class ValueVectorSetup {
     final DirectExpression batch;
     final TypedFieldId fieldId;
 
@@ -411,7 +560,11 @@ public class ClassGenerator<T>{
 
   }
 
-  public static class HoldingContainer{
+  /**
+   * Represents a (Nullable)?(Type)Holder instance.
+   */
+
+  public static class HoldingContainer {
     private final JVar holder;
     private final JFieldRef value;
     private final JFieldRef isSet;
@@ -483,10 +636,33 @@ public class ClassGenerator<T>{
     public TypeProtos.MinorType getMinorType() {
       return type.getMinorType();
     }
+
+    /**
+     * Convert holder to a string for debugging use.
+     */
+
+    @Override
+    public String toString() {
+      DebugStringBuilder buf = new DebugStringBuilder(this);
+      if (isConstant()) {
+        buf.append("const ");
+      }
+      buf.append(holder.type().fullName())
+        .append(" ")
+        .append(holder.name())
+        .append(", ")
+        .append(type.getMode().name())
+        .append(" ")
+        .append(type.getMinorType().name())
+        .append(", ");
+      holder.generate(buf.formatter());
+      buf.append(", ");
+      value.generate(buf.formatter());
+      return buf.toString();
+    }
   }
 
   public JType getHolderType(MajorType t) {
     return TypeHelper.getHolderType(model, t.getMinorType(), t.getMode());
   }
-
 }

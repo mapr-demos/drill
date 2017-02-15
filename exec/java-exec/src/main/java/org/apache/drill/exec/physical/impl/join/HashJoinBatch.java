@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -402,6 +402,9 @@ public class HashJoinBatch extends AbstractRecordBatch<HashJoinPOP> {
 
   public HashJoinProbe setupHashJoinProbe() throws ClassTransformationException, IOException {
     final CodeGenerator<HashJoinProbe> cg = CodeGenerator.get(HashJoinProbe.TEMPLATE_DEFINITION, context.getFunctionRegistry(), context.getOptions());
+    cg.plainJavaCapable(true);
+    // Uncomment out this line to debug the generated code.
+//    cg.saveCodeForDebugging(true);
     final ClassGenerator<HashJoinProbe> g = cg.getRoot();
 
     // Generate the code to project build side records
@@ -436,7 +439,7 @@ public class HashJoinBatch extends AbstractRecordBatch<HashJoinPOP> {
             .arg(buildIndex.band(JExpr.lit((int) Character.MAX_VALUE)))
             .arg(outIndex)
             .arg(inVV.component(buildIndex.shrz(JExpr.lit(16)))));
-
+        g.rotateBlock();
         fieldId++;
       }
     }
@@ -472,7 +475,7 @@ public class HashJoinBatch extends AbstractRecordBatch<HashJoinPOP> {
         final JVar outVV = g.declareVectorValueSetupAndMember("outgoing", new TypedFieldId(outputType, false, outputFieldId));
 
         g.getEvalBlock().add(outVV.invoke("copyFromSafe").arg(probeIndex).arg(outIndex).arg(inVV));
-
+        g.rotateBlock();
         fieldId++;
         outputFieldId++;
       }
