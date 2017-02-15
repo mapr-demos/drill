@@ -50,6 +50,11 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
     test("select * from openTSDB.`(metric=warp.speed.test, aggregator=sum)`;");
   }
 
+  @Test
+  public void testBasicQueryFROMWithInterpolationParam() throws Exception {
+    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test, downsample=5m-avg )`", 14);
+  }
+
   @Test(expected = UserRemoteException.class)
   public void testBasicQueryWithoutTableName() throws Exception {
     test("select * from openTSDB.``;");

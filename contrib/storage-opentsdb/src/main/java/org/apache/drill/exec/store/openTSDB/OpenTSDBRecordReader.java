@@ -71,6 +71,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   private static final String TIME = "time";
   private static final String METRIC = "metric";
   private static final String AGGREGATOR = "aggregator";
+  private static final String DOWNSAMPLE = "downsample";
 
   private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
@@ -147,14 +148,21 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     try {
       String time =
           getProperty(TIME, DEFAULT_TIME);
-      return client.getTable(time, generateQuery()).execute().body();
+
+      if (queryParameters.containsKey(DOWNSAMPLE)) {
+        return client.getTableWithInterpolation(
+            time,
+            getAggregatorWithMetricName(),
+            queryParameters.get(DOWNSAMPLE)).execute().body();
+      }
+      return client.getTable(time, getAggregatorWithMetricName()).execute().body();
     } catch (IOException e) {
       e.printStackTrace();
       return Collections.emptyList();
     }
   }
 
-  private String generateQuery() {
+  private String getAggregatorWithMetricName() {
     String tableName =
         queryParameters.get(METRIC);
 
