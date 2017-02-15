@@ -35,68 +35,68 @@ import java.io.IOException;
 @Slf4j
 public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
 
-    private final DrillbitContext context;
-    private final OpenTSDBStoragePluginConfig engineConfig;
-    private final OpenTSDBSchemaFactory schemaFactory;
+  private final DrillbitContext context;
+  private final OpenTSDBStoragePluginConfig engineConfig;
+  private final OpenTSDBSchemaFactory schemaFactory;
 
-    @SuppressWarnings("unused")
-    private final String name;
-    private final OpenTSDB client;
+  @SuppressWarnings("unused")
+  private final String name;
+  private final OpenTSDB client;
 
-    public OpenTSDBStoragePlugin(OpenTSDBStoragePluginConfig configuration, DrillbitContext context, String name) throws IOException {
-        this.context = context;
-        this.schemaFactory = new OpenTSDBSchemaFactory(this, name);
-        this.engineConfig = configuration;
-        this.name = name;
-        this.client = new Retrofit.Builder()
-                .baseUrl("http://" + configuration.getConnection())
-                .addConverterFactory(JacksonConverterFactory.create())
-                .build()
-                .create(OpenTSDB.class);
-    }
+  public OpenTSDBStoragePlugin(OpenTSDBStoragePluginConfig configuration, DrillbitContext context, String name) throws IOException {
+    this.context = context;
+    this.schemaFactory = new OpenTSDBSchemaFactory(this, name);
+    this.engineConfig = configuration;
+    this.name = name;
+    this.client = new Retrofit.Builder()
+        .baseUrl("http://" + configuration.getConnection())
+        .addConverterFactory(JacksonConverterFactory.create())
+        .build()
+        .create(OpenTSDB.class);
+  }
 
-    @Override
-    public void start() throws IOException {
-    }
+  @Override
+  public void start() throws IOException {
+  }
 
-    public OpenTSDB getClient() {
-        return client;
-    }
+  public OpenTSDB getClient() {
+    return client;
+  }
 
-    @Override
-    public void close() throws Exception {
+  @Override
+  public void close() throws Exception {
 //        client.close();
-    }
+  }
 
-    public DrillbitContext getContext() {
-        return this.context;
-    }
+  public DrillbitContext getContext() {
+    return this.context;
+  }
 
-    @Override
-    public boolean supportsRead() {
-        return true;
-    }
+  @Override
+  public boolean supportsRead() {
+    return true;
+  }
 
-    @Override
-    public OpenTSDBGroupScan getPhysicalScan(String userName, JSONOptions selection) throws IOException {
-        OpenTSDBScanSpec scanSpec = selection.getListWith(new ObjectMapper(), new TypeReference<OpenTSDBScanSpec>() {
-        });
-        return new OpenTSDBGroupScan(this, scanSpec, null);
-    }
+  @Override
+  public OpenTSDBGroupScan getPhysicalScan(String userName, JSONOptions selection) throws IOException {
+    OpenTSDBScanSpec scanSpec = selection.getListWith(new ObjectMapper(), new TypeReference<OpenTSDBScanSpec>() {
+    });
+    return new OpenTSDBGroupScan(this, scanSpec, null);
+  }
 
-    @Override
-    public boolean supportsWrite() {
-        return true;
-    }
+  @Override
+  public boolean supportsWrite() {
+    return true;
+  }
 
-    @Override
-    public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
-        schemaFactory.registerSchemas(schemaConfig, parent);
-    }
+  @Override
+  public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
+    schemaFactory.registerSchemas(schemaConfig, parent);
+  }
 
-    @Override
-    public OpenTSDBStoragePluginConfig getConfig() {
-        return engineConfig;
-    }
+  @Override
+  public OpenTSDBStoragePluginConfig getConfig() {
+    return engineConfig;
+  }
 
 }

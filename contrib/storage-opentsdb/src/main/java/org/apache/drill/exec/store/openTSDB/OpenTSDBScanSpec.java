@@ -17,21 +17,21 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonCreator;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.extern.slf4j.Slf4j;
 
 @Slf4j
 public class OpenTSDBScanSpec {
 
-    private final String tableName;
+  private final String tableName;
 
-    @JsonCreator
-    public OpenTSDBScanSpec(@JsonProperty("tableName") String tableName) {
-        this.tableName = tableName;
-    }
+  @JsonCreator
+  public OpenTSDBScanSpec(@JsonProperty("tableName") String tableName) {
+    this.tableName = tableName;
+  }
 
-    public String getTableName() {
-        return tableName;
-    }
+  public String getTableName() {
+    return tableName;
+  }
 }

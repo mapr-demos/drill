@@ -32,40 +32,44 @@ import java.util.Set;
 @Slf4j
 public class OpenTSDBDatabaseSchema extends AbstractSchema {
 
-    private final OpenTSDBTables schema;
-    private final Set<String> tableNames;
+  private final OpenTSDBTables schema;
+  private final Set<String> tableNames;
 
-    private final Map<String, DrillTable> drillTables = Maps.newHashMap();
+  private final Map<String, DrillTable> drillTables = Maps.newHashMap();
 
-    public OpenTSDBDatabaseSchema(Set<String> tableList, OpenTSDBTables schema,
-                                  String name) {
-        super(schema.getSchemaPath(), name);
-        this.schema = schema;
-        this.tableNames = Sets.newHashSet(tableList);
+  public OpenTSDBDatabaseSchema(Set<String> tableList, OpenTSDBTables schema,
+                                String name) {
+    super(schema.getSchemaPath(), name);
+    this.schema = schema;
+    this.tableNames = Sets.newHashSet(tableList);
+  }
+
+  @Override
+  public Table getTable(String tableName) {
+    if (isTableExist(tableName)) { // table does not exist
+      return null;
     }
 
-    @Override
-    public Table getTable(String tableName) {
-        if (!tableNames.contains(tableName)) { // table does not exist
-            return null;
-        }
-
-        if (!drillTables.containsKey(tableName)) {
-            drillTables.put(tableName, schema.getDrillTable(tableName));
-        }
-
-        return drillTables.get(tableName);
-
+    if (!drillTables.containsKey(tableName)) {
+      drillTables.put(tableName, schema.getDrillTable(tableName));
     }
 
-    @Override
-    public Set<String> getTableNames() {
-        return tableNames;
-    }
+    return drillTables.get(tableName);
 
-    @Override
-    public String getTypeName() {
-        return OpenTSDBStoragePluginConfig.NAME;
-    }
+  }
+
+  private boolean isTableExist(String tableName) {
+    return !tableNames.contains(tableName);
+  }
+
+  @Override
+  public Set<String> getTableNames() {
+    return tableNames;
+  }
+
+  @Override
+  public String getTypeName() {
+    return OpenTSDBStoragePluginConfig.NAME;
+  }
 
 }

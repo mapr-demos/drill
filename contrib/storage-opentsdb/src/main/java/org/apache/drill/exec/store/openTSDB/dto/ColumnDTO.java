@@ -24,13 +24,13 @@ import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 @AllArgsConstructor
 public class ColumnDTO {
 
-    @Getter
-    private final String columnName;
+  @Getter
+  private final String columnName;
 
-    @Getter
-    private final OpenTSDBTypes columnType;
+  @Getter
+  private final OpenTSDBTypes columnType;
 
-    public boolean isNullable() {
-        return true;
-    }
+  public boolean isNullable() {
+    return true;
+  }
 }

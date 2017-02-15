@@ -19,35 +19,84 @@ package org.apache.drill.exec.store.openTSDB.client;
 
 import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
+import org.apache.drill.exec.store.openTSDB.dto.Table;
 
 import java.io.IOException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+
+import static org.apache.drill.exec.store.openTSDB.OpenTSDBRecordReader.DEFAULT_TIME;
+import static org.apache.drill.exec.store.openTSDB.OpenTSDBRecordReader.SUM_AGGREGATOR;
+
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATED_VALUE;
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATE_TAGS;
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.METRIC;
+import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.TIMESTAMP;
 
 // TODO: Refactor this class
 @Slf4j
 public class Schema {
 
-    private final List<ColumnDTO> columns = new ArrayList<>();
+  enum DefaultColumns {
 
-    public Schema() {
-        columns.add(new ColumnDTO("metric", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("aggregate tags", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("timestamp", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("aggregated value", OpenTSDBTypes.STRING));
-        columns.add(new ColumnDTO("tags", OpenTSDBTypes.STRING));
+    METRIC("metric"),
+    TIMESTAMP("timestamp"),
+    AGGREGATE_TAGS("aggregate tags"),
+    AGGREGATED_VALUE("aggregated value");
+
+    private String columnName;
+
+    DefaultColumns(String name) {
+      this.columnName = name;
     }
 
-    // TODO: refactor this
-    public List<ColumnDTO> getColumns() throws IOException {
-        return columns;
+    @Override
+    public String toString() {
+      return columnName;
     }
+  }
 
-    public int getColumnCount() {
-        return columns.size();
-    }
+  private final List<ColumnDTO> columns = new ArrayList<>();
+  private final OpenTSDB client;
+  private final String metricName;
 
-    public ColumnDTO getColumnByIndex(int columnIndex) {
-        return columns.get(columnIndex);
+  public Schema(OpenTSDB client, String metricName) {
+    this.client = client;
+    this.metricName = metricName;
+    setupStructure();
+  }
+
+  public List<ColumnDTO> getColumns() throws IOException {
+    return Collections.unmodifiableList(columns);
+  }
+
+  private void setupStructure() {
+    columns.add(new ColumnDTO(METRIC.toString(), OpenTSDBTypes.STRING));
+    columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
+    columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
+    columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
+
+    List<Table> res = null;
+    try {
+      res = client.getTable(DEFAULT_TIME, SUM_AGGREGATOR + ":" + metricName).execute().body();
+    } catch (IOException e) {
+      e.printStackTrace();
     }
+    if (res != null) {
+      for (Table table : res) {
+        for (String tag : table.getTags().keySet()) {
+          columns.add(new ColumnDTO(tag, OpenTSDBTypes.STRING));
+        }
+      }
+    }
+  }
+
+  public int getColumnCount() {
+    return columns.size();
+  }
+
+  public ColumnDTO getColumnByIndex(int columnIndex) {
+    return columns.get(columnIndex);
+  }
 }

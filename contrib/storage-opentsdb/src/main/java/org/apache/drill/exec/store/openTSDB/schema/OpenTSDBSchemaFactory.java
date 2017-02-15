@@ -40,95 +40,98 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
+import static org.apache.drill.exec.store.openTSDB.Util.validateTableName;
+
 @Slf4j
 public class OpenTSDBSchemaFactory implements SchemaFactory {
 
-    final private String schemaName;
-    private OpenTSDBStoragePlugin plugin;
+  final private String schemaName;
+  private OpenTSDBStoragePlugin plugin;
 
-    public OpenTSDBSchemaFactory(OpenTSDBStoragePlugin plugin, String schemaName) {
-        this.plugin = plugin;
-        this.schemaName = schemaName;
+  public OpenTSDBSchemaFactory(OpenTSDBStoragePlugin plugin, String schemaName) {
+    this.plugin = plugin;
+    this.schemaName = schemaName;
+  }
+
+  @Override
+  public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
+    OpenTSDBTables schema = new OpenTSDBTables(schemaName);
+    parent.add(schemaName, schema);
+  }
+
+
+  class OpenTSDBTables extends AbstractSchema {
+
+    private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
+
+    public OpenTSDBTables(String name) {
+      super(ImmutableList.<String>of(), name);
     }
 
     @Override
-    public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
-        OpenTSDBTables schema = new OpenTSDBTables(schemaName);
-        parent.add(schemaName, schema);
+    public AbstractSchema getSubSchema(String name) {
+      Set<String> tables;
+      try {
+        if (!schemaMap.containsKey(name)) {
+          tables = plugin.getClient().getAllTablesName().execute().body();
+          schemaMap.put(name, new OpenTSDBDatabaseSchema(tables, this, name));
+        }
+        return schemaMap.get(name);
+      } catch (IOException e) {
+        e.printStackTrace();
+        return null;
+      }
     }
 
-
-    class OpenTSDBTables extends AbstractSchema {
-
-        private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
-
-        public OpenTSDBTables(String name) {
-            super(ImmutableList.<String>of(), name);
-        }
-
-        @Override
-        public AbstractSchema getSubSchema(String name) {
-            Set<String> tables;
-            try {
-                if (!schemaMap.containsKey(name)) {
-                    tables = plugin.getClient().getAllTablesName().execute().body();
-                    schemaMap.put(name, new OpenTSDBDatabaseSchema(tables, this, name));
-                }
-                return schemaMap.get(name);
-            } catch (IOException e) {
-                e.printStackTrace();
-                return null;
-            }
-        }
-
-        @Override
-        public Set<String> getSubSchemaNames() {
-            return Collections.emptySet();
-        }
-
-        @Override
-        public Table getTable(String name) {
-            OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
-            try {
-                return new DrillOpenTSDBTable(schemaName, plugin, new Schema(), scanSpec);
-            } catch (Exception e) {
-                logger.warn("Failure while retrieving openTSDB table {}", name, e);
-                return null;
-            }
-        }
-
-        @Override
-        public Set<String> getTableNames() {
-            try {
-                return plugin.getClient().getAllTablesName().execute().body();
-            } catch (Exception e) {
-                logger.warn("Failure reading openTSDB tables.", e);
-                return Collections.emptySet();
-            }
-        }
-
-        @Override
-        public CreateTableEntry createNewTable(final String tableName, List<String> partitionColumns) {
-            return null;
-        }
-
-        @Override
-        public void dropTable(String tableName) {
-        }
-
-        @Override
-        public boolean isMutable() {
-            return true;
-        }
-
-        @Override
-        public String getTypeName() {
-            return OpenTSDBStoragePluginConfig.NAME;
-        }
-
-        DrillTable getDrillTable(String collectionName) {
-            OpenTSDBScanSpec openTSDBScanSpec = new OpenTSDBScanSpec(collectionName);
-            return new DynamicDrillTable(plugin, schemaName, null, openTSDBScanSpec);
-        }
+    @Override
+    public Set<String> getSubSchemaNames() {
+      return Collections.emptySet();
     }
+
+    @Override
+    public Table getTable(String name) {
+      OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
+      name = validateTableName(name);
+      try {
+        return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
+      } catch (Exception e) {
+        logger.warn("Failure while retrieving openTSDB table {}", name, e);
+        return null;
+      }
+    }
+
+    @Override
+    public Set<String> getTableNames() {
+      try {
+        return plugin.getClient().getAllTablesName().execute().body();
+      } catch (Exception e) {
+        logger.warn("Failure reading openTSDB tables.", e);
+        return Collections.emptySet();
+      }
+    }
+
+    @Override
+    public CreateTableEntry createNewTable(final String tableName, List<String> partitionColumns) {
+      return null;
+    }
+
+    @Override
+    public void dropTable(String tableName) {
+    }
+
+    @Override
+    public boolean isMutable() {
+      return true;
+    }
+
+    @Override
+    public String getTypeName() {
+      return OpenTSDBStoragePluginConfig.NAME;
+    }
+
+    DrillTable getDrillTable(String collectionName) {
+      OpenTSDBScanSpec openTSDBScanSpec = new OpenTSDBScanSpec(collectionName);
+      return new DynamicDrillTable(plugin, schemaName, null, openTSDBScanSpec);
+    }
+  }
 }
