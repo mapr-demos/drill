@@ -17,12 +17,14 @@
  */
 package org.apache.drill.exec.store.openTSDB.client;
 
+import org.apache.drill.exec.store.openTSDB.client.query.BaseQuery;
 import org.apache.drill.exec.store.openTSDB.dto.Table;
 import retrofit2.Call;
+import retrofit2.http.Body;
 import retrofit2.http.GET;
+import retrofit2.http.POST;
 import retrofit2.http.Query;
 
-import java.util.List;
 import java.util.Set;
 
 public interface OpenTSDB {
@@ -31,11 +33,15 @@ public interface OpenTSDB {
   Call<Set<String>> getAllTablesName();
 
   @GET("api/query")
-  Call<List<Table>> getTable(@Query("start") String time, @Query("m") String tableName);
+  Call<Set<Table>> getTable(@Query("start") String time, @Query("m") String tableName);
 
   @GET("api/query")
-  Call<List<Table>> getTableWithInterpolation(
+  Call<Set<Table>> getTableWithInterpolation(
       @Query("start") String time,
       @Query("m") String tableName,
       @Query("downsample") String downsample);
+
+  @POST("api/query")
+  Call<Set<Table>> getTables(@Body BaseQuery query);
+
 }

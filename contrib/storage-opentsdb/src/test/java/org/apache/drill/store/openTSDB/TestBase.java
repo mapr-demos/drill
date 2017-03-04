@@ -38,7 +38,7 @@ public class TestBase extends PlanTestBase {
 
   public void printResultAndVerifyRowCount(List<QueryDataBatch> results,
                                            int expectedRowCount) throws SchemaChangeException {
-    setColumnWidth(25);
+    setColumnWidth(30);
     int rowCount = printResult(results);
     if (expectedRowCount != -1) {
       Assert.assertEquals(expectedRowCount, rowCount);
