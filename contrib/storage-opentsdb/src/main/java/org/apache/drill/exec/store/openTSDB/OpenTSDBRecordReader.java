@@ -356,7 +356,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private void setTimestampColumnValue(Long data, ProjectedColumnInfo pci) {
     ((NullableTimeStampVector.Mutator) pci.vv.getMutator())
-        .setSafe(0, data / 1000);
+        .setSafe(0, data * 1000);
   }
 
   private void setDoubleColumnValue(Double data, ProjectedColumnInfo pci) {

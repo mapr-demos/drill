@@ -24,7 +24,7 @@ import org.junit.Test;
 
 import static org.apache.drill.store.openTSDB.TestTableGenerator.setupTestData;
 
-//@Ignore("requires a remote openTSDB server to run.")
+@Ignore("requires a remote openTSDB server to run.")
 public class TestOpenTSDBPlugin extends BaseTestQuery {
 
   private static TestBase base;
@@ -52,7 +52,7 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
 
   @Test
   public void testBasicQueryGROUPBY() throws Exception {
-    base.runSQLVerifyCount("select `timestamp`, sum(`aggregated value`) from openTSDB.`(metric=warp.speed.test, aggregator=sum)` group by `timestamp`", 2);
+    base.runSQLVerifyCount("select `timestamp`, sum(`aggregated value`) from openTSDB.`(metric=warp.speed.test, aggregator=sum)` group by `timestamp`", 15);
   }
 
   @Test
