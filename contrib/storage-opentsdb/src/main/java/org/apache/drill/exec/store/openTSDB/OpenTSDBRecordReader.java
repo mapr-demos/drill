@@ -117,8 +117,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         .build();
   }
 
-  public OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
-                              List<SchemaPath> projectedColumns, FragmentContext context) throws IOException {
+  OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
+                       List<SchemaPath> projectedColumns) throws IOException {
     setColumns(projectedColumns);
     this.client = client;
     setupQueryParam(subScanSpec.getTableName());
@@ -163,54 +163,99 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private Set<Table> getTablesFromDB() {
     try {
-      String time =
-          getProperty(TIME, DEFAULT_TIME);
-
-      Set<String> extractedTags = new HashSet<>();
-
-      BaseQuery base = new BaseQuery();
-      Query query = new Query();
-
-      base.setStart(DEFAULT_TIME);
-
-      if (queryParameters.containsKey(AGGREGATOR)) {
-        query.setAggregator(queryParameters.get(AGGREGATOR));
-      } else {
-        query.setAggregator(SUM_AGGREGATOR);
-      }
-      query.setMetric(queryParameters.get(METRIC));
-      Map<String, String> tags = new HashMap<>();
-
-      query.setTags(tags);
-
-      Set<Query> queries = new HashSet<>();
-      queries.add(query);
-
-      base.setQueries(queries);
-
-      Set<Table> tables = client.getTables(base).execute().body();
-
-      if (queryParameters.containsKey(DOWNSAMPLE)) {
-        query.setDownsample(queryParameters.get(DOWNSAMPLE));
-      }
-
-      for (Table table : tables) {
-        extractedTags.addAll(table.getAggregateTags());
-        extractedTags.addAll(table.getTags().keySet());
-      }
-
-      tables.clear();
-
-      for (String value : extractedTags) {
-        tags.clear();
-        tags.put(value, "*");
-        tables.addAll(client.getTables(base).execute().body());
-      }
-      return tables;
+      return getAllMetricsFromDBByTags();
     } catch (IOException e) {
       e.printStackTrace();
       return Collections.emptySet();
     }
+  }
+
+  private Set<Table> getAllMetricsFromDBByTags() throws IOException {
+    Map<String, String> tags = new HashMap<>();
+    BaseQuery baseQuery = new BaseQuery();
+    Query subQuery = new Query();
+
+    setupBaseQuery(tags, baseQuery, subQuery);
+
+    Set<Table> tables =
+        getBaseTables(baseQuery);
+
+    Set<String> extractedTags =
+        getTagsFromTables(tables);
+
+    tables.clear();
+
+    for (String value : extractedTags) {
+      transformTagsForRequest(tags, value);
+      tables.addAll(getAllTablesWithSpecialTag(baseQuery));
+    }
+    return tables;
+  }
+
+  private Set<Table> getAllTablesWithSpecialTag(BaseQuery base) throws IOException {
+    return client.getTables(base).execute().body();
+  }
+
+  private Set<Table> getBaseTables(BaseQuery base) throws IOException {
+    return getAllTablesWithSpecialTag(base);
+  }
+
+  private void transformTagsForRequest(Map<String, String> tags, String value) {
+    tags.clear();
+    tags.put(value, "*");
+  }
+
+  private void setupBaseQuery(Map<String, String> tags, BaseQuery base, Query query) {
+    setStartTimeInDBBaseQuery(base);
+    setupSubQuery(tags, query);
+    addSubQueryToBaseQuery(base, query);
+  }
+
+  private void setupSubQuery(Map<String, String> tags, Query query) {
+    setAggregatorInQuery(query);
+    setMetricNameInQuery(query);
+    setDownsampleInQuery(query);
+    setEmptyTagMapInQuery(query, tags);
+  }
+
+  private void addSubQueryToBaseQuery(BaseQuery base, Query query) {
+    Set<Query> queries = new HashSet<>();
+    queries.add(query);
+
+    base.setQueries(queries);
+  }
+
+  private void setEmptyTagMapInQuery(Query query, Map<String, String> tags) {
+    query.setTags(tags);
+  }
+
+  private void setDownsampleInQuery(Query query) {
+    if (queryParameters.containsKey(DOWNSAMPLE)) {
+      query.setDownsample(queryParameters.get(DOWNSAMPLE));
+    }
+  }
+
+  private void setMetricNameInQuery(Query query) {
+    query.setMetric(queryParameters.get(METRIC));
+  }
+
+  private void setAggregatorInQuery(Query query) {
+    query.setAggregator(getProperty(AGGREGATOR, SUM_AGGREGATOR));
+  }
+
+  private void setStartTimeInDBBaseQuery(BaseQuery base) {
+    base.setStart(getProperty(TIME, DEFAULT_TIME));
+  }
+
+  private Set<String> getTagsFromTables(Set<Table> tables) {
+    Set<String> extractedTags = new HashSet<>();
+
+    for (Table table : tables) {
+      extractedTags.addAll(table.getAggregateTags());
+      extractedTags.addAll(table.getTags().keySet());
+    }
+
+    return extractedTags;
   }
 
   private String getProperty(String propertyName, String defaultValue) {
@@ -225,9 +270,9 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
       showedTables.add(table);
       if (showedTables.contains(table)) {
         if (setupTimestampIterator(table)) {
-            table = tableIterator.next();
-            showed.clear();
-            setupTimestampIterator(table);
+          table = tableIterator.next();
+          showed.clear();
+          setupTimestampIterator(table);
         }
         try {
           addRowResult(table);
@@ -311,23 +356,23 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
           setStringColumnValue(table.getAggregateTags().toString(), pci);
           break;
         case "timestamp":
-          if (timestamp != null) {
-            setTimestampColumnValue(Long.parseLong(timestamp), pci);
-          } else {
-            setTimestampColumnValue(Long.parseLong("0"), pci);
-          }
+          setTimestampColumnValue(timestamp, pci);
           break;
         case "aggregated value":
-          if (value != null) {
-            setDoubleColumnValue(Double.parseDouble(value), pci);
-          } else {
-            setDoubleColumnValue(0.0, pci);
-          }
+          setDoubleColumnValue(value, pci);
           break;
         default:
           setStringColumnValue(tags.get(pci.openTSDBColumn.getColumnName()), pci);
       }
     }
+  }
+
+  private void setTimestampColumnValue(String timestamp, ProjectedColumnInfo pci) {
+    setTimestampColumnValue(timestamp != null ? Long.parseLong(timestamp) : Long.parseLong("0"), pci);
+  }
+
+  private void setDoubleColumnValue(String value, ProjectedColumnInfo pci) {
+    setDoubleColumnValue(value != null ? Double.parseDouble(value) : 0.0, pci);
   }
 
   private void setStringColumnValue(String data, ProjectedColumnInfo pci) {
