@@ -18,10 +18,12 @@
 package org.apache.drill.exec.store.openTSDB.dto;
 
 import lombok.AllArgsConstructor;
+import lombok.EqualsAndHashCode;
 import lombok.Getter;
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 
 @AllArgsConstructor
+@EqualsAndHashCode
 public class ColumnDTO {
 
   @Getter

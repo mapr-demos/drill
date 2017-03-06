@@ -35,12 +35,6 @@ public interface OpenTSDB {
   @GET("api/query")
   Call<Set<Table>> getTable(@Query("start") String time, @Query("m") String tableName);
 
-  @GET("api/query")
-  Call<Set<Table>> getTableWithInterpolation(
-      @Query("start") String time,
-      @Query("m") String tableName,
-      @Query("downsample") String downsample);
-
   @POST("api/query")
   Call<Set<Table>> getTables(@Body BaseQuery query);
 

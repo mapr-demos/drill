@@ -166,13 +166,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
       String time =
           getProperty(TIME, DEFAULT_TIME);
 
-      if (queryParameters.containsKey(DOWNSAMPLE)) {
-        return client.getTableWithInterpolation(
-            time,
-            getAggregatorWithMetricName(),
-            queryParameters.get(DOWNSAMPLE)).execute().body();
-      }
-
       Set<String> extractedTags = new HashSet<>();
 
       BaseQuery base = new BaseQuery();
@@ -197,6 +190,10 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
       Set<Table> tables = client.getTables(base).execute().body();
 
+      if (queryParameters.containsKey(DOWNSAMPLE)) {
+        query.setDownsample(queryParameters.get(DOWNSAMPLE));
+      }
+
       for (Table table : tables) {
         extractedTags.addAll(table.getAggregateTags());
         extractedTags.addAll(table.getTags().keySet());
@@ -216,16 +213,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
   }
 
-  private String getAggregatorWithMetricName() {
-    String tableName =
-        queryParameters.get(METRIC);
-
-    String aggregator =
-        getProperty(AGGREGATOR, SUM_AGGREGATOR);
-
-    return aggregator + ":" + tableName;
-  }
-
   private String getProperty(String propertyName, String defaultValue) {
     return queryParameters.containsKey(propertyName) ?
         queryParameters.get(propertyName) : defaultValue;
@@ -238,11 +225,9 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
       showedTables.add(table);
       if (showedTables.contains(table)) {
         if (setupTimestampIterator(table)) {
-//          if (!tableIterator.hasNext()) {
             table = tableIterator.next();
             showed.clear();
             setupTimestampIterator(table);
-//          }
         }
         try {
           addRowResult(table);

@@ -113,7 +113,10 @@ public class Schema {
 
     for (Table table : tables) {
       for (String tag : table.getTags().keySet()) {
-        columns.add(new ColumnDTO(tag, OpenTSDBTypes.STRING));
+        ColumnDTO tmp = new ColumnDTO(tag, OpenTSDBTypes.STRING);
+        if (!columns.contains(tmp)) {
+          columns.add(tmp);
+        }
       }
     }
 

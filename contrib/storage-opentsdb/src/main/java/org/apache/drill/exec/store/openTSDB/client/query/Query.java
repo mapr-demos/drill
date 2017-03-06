@@ -27,5 +27,6 @@ public class Query {
   private String aggregator;
   private String metric;
   private String rate;
+  private String downsample;
   private Map<String, String> tags;
 }
