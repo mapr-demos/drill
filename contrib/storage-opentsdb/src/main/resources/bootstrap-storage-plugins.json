@@ -2,7 +2,7 @@
   "storage": {
     openTSDB: {
       type: "openTSDB",
-      connection: "172.16.229.128:4242",
+      connection: "1.2.3.4:4242",
       enabled: true
     }
   }

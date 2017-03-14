@@ -19,7 +19,6 @@ package org.apache.drill.exec.store.openTSDB.schema;
 
 import com.google.common.collect.Maps;
 import com.google.common.collect.Sets;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.schema.Table;
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.store.AbstractSchema;
@@ -29,8 +28,9 @@ import org.apache.drill.exec.store.openTSDB.schema.OpenTSDBSchemaFactory.OpenTSD
 import java.util.Map;
 import java.util.Set;
 
-@Slf4j
 public class OpenTSDBDatabaseSchema extends AbstractSchema {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBDatabaseSchema.class);
 
   private final OpenTSDBTables schema;
   private final Set<String> tableNames;

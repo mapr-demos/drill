@@ -27,7 +27,6 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.ListMultimap;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.physical.EndpointAffinity;
@@ -49,9 +48,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 
-@Slf4j
 @JsonTypeName("openTSDB-scan")
 public class OpenTSDBGroupScan extends AbstractGroupScan {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBGroupScan.class);
 
   private static final long DEFAULT_TABLET_SIZE = 1000;
 
@@ -107,8 +107,12 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
     @Override
     public boolean equals(Object o) {
-      if (this == o) return true;
-      if (o == null || getClass() != o.getClass()) return false;
+      if (this == o) {
+        return true;
+      }
+      if (o == null || getClass() != o.getClass()) {
+        return false;
+      }
 
       OpenTSDBWork that = (OpenTSDBWork) o;
 

@@ -19,10 +19,10 @@ package org.apache.drill.exec.store.openTSDB;
 
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import lombok.extern.slf4j.Slf4j;
 
-@Slf4j
 public class OpenTSDBScanSpec {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBScanSpec.class);
 
   private final String tableName;
 

@@ -20,7 +20,6 @@ package org.apache.drill.exec.store.openTSDB;
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.Lists;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -31,7 +30,6 @@ import org.apache.drill.common.types.TypeProtos.MinorType;
 import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.expr.TypeHelper;
-import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.OutputMutator;
 import org.apache.drill.exec.record.MaterializedField;
@@ -63,8 +61,9 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 import static org.apache.drill.exec.store.openTSDB.Util.isTableNameValid;
 import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
 
-@Slf4j
 public class OpenTSDBRecordReader extends AbstractRecordReader {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBRecordReader.class);
 
   /**
    * openTSDB required constants for API call
@@ -102,6 +101,10 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   @Override
   protected boolean isSkipQuery() {
     return super.isSkipQuery();
+  }
+
+  @Override
+  public void close() throws Exception {
   }
 
   private static class ProjectedColumnInfo {
@@ -157,15 +160,11 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     return processOpenTSDBTablesData();
   }
 
-  @Override
-  public void close() throws Exception {
-  }
-
   private Set<Table> getTablesFromDB() {
     try {
       return getAllMetricsFromDBByTags();
     } catch (IOException e) {
-      e.printStackTrace();
+      log.warn("A problem occurred when talking to the server", e);
       return Collections.emptySet();
     }
   }
@@ -280,8 +279,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
           if (!iterator.hasNext() && !tableIterator.hasNext()) {
             tableIterator = null;
           }
-        } catch (SchemaChangeException | IOException e) {
-          e.printStackTrace();
+        } catch (SchemaChangeException sce) {
+          log.warn("the addition of this field is incompatible with this OutputMutator's capabilities", sce);
         }
         setValueCountForMutator();
         return 1;
@@ -322,7 +321,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
   }
 
-  private void addRowResult(Table table) throws SchemaChangeException, IOException {
+  private void addRowResult(Table table) throws SchemaChangeException{
     setupProjectedColsIfItNull();
 
     String timestamp = null;
@@ -340,7 +339,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     setupDataToDrillTable(table, timestamp, value, table.getTags());
   }
 
-  private void setupProjectedColsIfItNull() throws SchemaChangeException, IOException {
+  private void setupProjectedColsIfItNull() throws SchemaChangeException {
     if (projectedCols == null) {
       initCols(new Schema(client, queryParameters.get("metric")));
     }

@@ -19,7 +19,6 @@ package org.apache.drill.exec.store.openTSDB.schema;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.drill.exec.planner.logical.CreateTableEntry;
@@ -42,8 +41,9 @@ import java.util.Set;
 
 import static org.apache.drill.exec.store.openTSDB.Util.validateTableName;
 
-@Slf4j
 public class OpenTSDBSchemaFactory implements SchemaFactory {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBSchemaFactory.class);
 
   final private String schemaName;
   private OpenTSDBStoragePlugin plugin;
@@ -58,7 +58,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     OpenTSDBTables schema = new OpenTSDBTables(schemaName);
     parent.add(schemaName, schema);
   }
-
 
   class OpenTSDBTables extends AbstractSchema {
 
@@ -78,7 +77,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
         }
         return schemaMap.get(name);
       } catch (IOException e) {
-        e.printStackTrace();
+        log.warn("A problem occurred when talking to the server", e);
         return null;
       }
     }
@@ -95,7 +94,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
       try {
         return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
       } catch (Exception e) {
-        logger.warn("Failure while retrieving openTSDB table {}", name, e);
+        log.warn("Failure while retrieving openTSDB table {}", name, e);
         return null;
       }
     }
@@ -105,7 +104,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
       try {
         return plugin.getClient().getAllTablesName().execute().body();
       } catch (Exception e) {
-        logger.warn("Failure reading openTSDB tables.", e);
+        log.warn("Failure reading openTSDB tables.", e);
         return Collections.emptySet();
       }
     }

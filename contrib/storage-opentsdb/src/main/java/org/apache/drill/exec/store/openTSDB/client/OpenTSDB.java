@@ -37,5 +37,4 @@ public interface OpenTSDB {
 
   @POST("api/query")
   Call<Set<Table>> getTables(@Body BaseQuery query);
-
 }

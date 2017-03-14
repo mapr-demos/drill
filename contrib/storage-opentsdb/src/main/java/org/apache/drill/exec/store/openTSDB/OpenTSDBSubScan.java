@@ -23,7 +23,6 @@ import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.google.common.base.Preconditions;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.logical.StoragePluginConfig;
@@ -38,9 +37,10 @@ import java.util.Iterator;
 import java.util.LinkedList;
 import java.util.List;
 
-@Slf4j
 @JsonTypeName("openTSDB-tablet-scan")
 public class OpenTSDBSubScan extends AbstractBase implements SubScan {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBSubScan.class);
 
   @JsonProperty
   public final OpenTSDBStoragePluginConfig storage;

@@ -19,7 +19,6 @@ package org.apache.drill.exec.store.openTSDB;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import lombok.extern.slf4j.Slf4j;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.JSONOptions;
 import org.apache.drill.exec.server.DrillbitContext;
@@ -32,8 +31,9 @@ import retrofit2.converter.jackson.JacksonConverterFactory;
 
 import java.io.IOException;
 
-@Slf4j
 public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBStoragePlugin.class);
 
   private final DrillbitContext context;
   private final OpenTSDBStoragePluginConfig engineConfig;
@@ -65,7 +65,6 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
 
   @Override
   public void close() throws Exception {
-//        client.close();
   }
 
   public DrillbitContext getContext() {

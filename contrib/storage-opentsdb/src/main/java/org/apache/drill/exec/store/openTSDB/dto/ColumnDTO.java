@@ -17,22 +17,49 @@
  */
 package org.apache.drill.exec.store.openTSDB.dto;
 
-import lombok.AllArgsConstructor;
-import lombok.EqualsAndHashCode;
-import lombok.Getter;
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 
-@AllArgsConstructor
-@EqualsAndHashCode
 public class ColumnDTO {
 
-  @Getter
   private final String columnName;
-
-  @Getter
   private final OpenTSDBTypes columnType;
+
+  public ColumnDTO(String columnName, OpenTSDBTypes columnType) {
+    this.columnName = columnName;
+    this.columnType = columnType;
+  }
+
+  public String getColumnName() {
+    return columnName;
+  }
+
+  public OpenTSDBTypes getColumnType() {
+    return columnType;
+  }
 
   public boolean isNullable() {
     return true;
+  }
+
+
+  @Override
+  public boolean equals(Object o) {
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
+
+    ColumnDTO columnDTO = (ColumnDTO) o;
+
+    return (columnName != null ? columnName.equals(columnDTO.columnName) : columnDTO.columnName == null) && columnType == columnDTO.columnType;
+  }
+
+  @Override
+  public int hashCode() {
+    int result = columnName != null ? columnName.hashCode() : 0;
+    result = 31 * result + (columnType != null ? columnType.hashCode() : 0);
+    return result;
   }
 }

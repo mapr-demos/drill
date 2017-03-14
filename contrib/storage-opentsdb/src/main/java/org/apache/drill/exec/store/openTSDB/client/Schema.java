@@ -17,7 +17,6 @@
  */
 package org.apache.drill.exec.store.openTSDB.client;
 
-import lombok.extern.slf4j.Slf4j;
 import org.apache.drill.exec.store.openTSDB.client.query.BaseQuery;
 import org.apache.drill.exec.store.openTSDB.client.query.Query;
 import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
@@ -40,9 +39,9 @@ import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.METRIC;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.TIMESTAMP;
 
-// TODO: Refactor this class
-@Slf4j
 public class Schema {
+
+  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(Schema.class);
 
   enum DefaultColumns {
 
@@ -67,23 +66,26 @@ public class Schema {
   private final OpenTSDB client;
   private final String metricName;
 
-  public Schema(OpenTSDB client, String metricName) throws IOException {
+  public Schema(OpenTSDB client, String metricName) {
     this.client = client;
     this.metricName = metricName;
     setupStructure();
   }
 
-  public List<ColumnDTO> getColumns() throws IOException {
+  public List<ColumnDTO> getColumns() {
     return Collections.unmodifiableList(columns);
   }
 
-  private void setupStructure() throws IOException {
-    columns.add(new ColumnDTO(METRIC.toString(), OpenTSDBTypes.STRING));
-    columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
-    columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
-    columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
-
-    columns.addAll(getUnfixedColumns());
+  private void setupStructure() {
+    try {
+      columns.add(new ColumnDTO(METRIC.toString(), OpenTSDBTypes.STRING));
+      columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
+      columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
+      columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
+      columns.addAll(getUnfixedColumns());
+    } catch (IOException ie) {
+      log.warn("A problem occurred when talking to the server", ie);
+    }
   }
 
   private List<ColumnDTO> getUnfixedColumns() throws IOException {
