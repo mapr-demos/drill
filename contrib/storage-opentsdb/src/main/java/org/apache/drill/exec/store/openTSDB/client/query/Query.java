@@ -18,12 +18,37 @@ package org.apache.drill.exec.store.openTSDB.client.query;
 
 import java.util.Map;
 
+/**
+ * Query is an abstraction of openTSDB subQuery
+ * and it is integral part of DBQuery
+ * <p>
+ * Each sub query can retrieve individual or groups of timeseries data,
+ * performing aggregation on each set.
+ */
 public class Query {
 
+  /**
+   * The name of an aggregation function to use.
+   */
   private String aggregator;
+  /**
+   * The name of a metric stored in the system
+   */
   private String metric;
+  /**
+   * Whether or not the data should be converted into deltas before returning.
+   * This is useful if the metric is a continuously incrementing counter
+   * and you want to view the rate of change between data points.
+   */
   private String rate;
+  /**
+   * An optional downsampling function to reduce the amount of data returned.
+   */
   private String downsample;
+  /**
+   * To drill down to specific timeseries or group results by tag,
+   * supply one or more map values in the same format as the query string.
+   */
   private Map<String, String> tags;
 
   public String getAggregator() {
@@ -75,21 +100,21 @@ public class Query {
       return false;
     }
 
-    Query query = (Query) o;
+    Query subQuery = (Query) o;
 
-    if (aggregator != null ? !aggregator.equals(query.aggregator) : query.aggregator != null) {
+    if (aggregator != null ? !aggregator.equals(subQuery.aggregator) : subQuery.aggregator != null) {
       return false;
     }
-    if (metric != null ? !metric.equals(query.metric) : query.metric != null) {
+    if (metric != null ? !metric.equals(subQuery.metric) : subQuery.metric != null) {
       return false;
     }
-    if (rate != null ? !rate.equals(query.rate) : query.rate != null) {
+    if (rate != null ? !rate.equals(subQuery.rate) : subQuery.rate != null) {
       return false;
     }
-    if (downsample != null ? !downsample.equals(query.downsample) : query.downsample != null) {
+    if (downsample != null ? !downsample.equals(subQuery.downsample) : subQuery.downsample != null) {
       return false;
     }
-    return tags != null ? tags.equals(query.tags) : query.tags == null;
+    return tags != null ? tags.equals(subQuery.tags) : subQuery.tags == null;
   }
 
   @Override
@@ -104,7 +129,7 @@ public class Query {
 
   @Override
   public String toString() {
-    return "Query{" +
+    return "SubQuery{" +
         "aggregator='" + aggregator + '\'' +
         ", metric='" + metric + '\'' +
         ", rate='" + rate + '\'' +

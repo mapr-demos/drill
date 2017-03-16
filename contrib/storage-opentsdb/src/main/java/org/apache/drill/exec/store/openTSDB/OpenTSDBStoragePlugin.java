@@ -36,18 +36,16 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBStoragePlugin.class);
 
   private final DrillbitContext context;
+
   private final OpenTSDBStoragePluginConfig engineConfig;
   private final OpenTSDBSchemaFactory schemaFactory;
 
-  @SuppressWarnings("unused")
-  private final String name;
   private final OpenTSDB client;
 
   public OpenTSDBStoragePlugin(OpenTSDBStoragePluginConfig configuration, DrillbitContext context, String name) throws IOException {
     this.context = context;
     this.schemaFactory = new OpenTSDBSchemaFactory(this, name);
     this.engineConfig = configuration;
-    this.name = name;
     this.client = new Retrofit.Builder()
         .baseUrl("http://" + configuration.getConnection())
         .addConverterFactory(JacksonConverterFactory.create())
@@ -59,21 +57,18 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
   public void start() throws IOException {
   }
 
-  public OpenTSDB getClient() {
-    return client;
-  }
-
   @Override
   public void close() throws Exception {
-  }
-
-  public DrillbitContext getContext() {
-    return this.context;
   }
 
   @Override
   public boolean supportsRead() {
     return true;
+  }
+
+  @Override
+  public OpenTSDBStoragePluginConfig getConfig() {
+    return engineConfig;
   }
 
   @Override
@@ -93,9 +88,11 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
     schemaFactory.registerSchemas(schemaConfig, parent);
   }
 
-  @Override
-  public OpenTSDBStoragePluginConfig getConfig() {
-    return engineConfig;
+  public OpenTSDB getClient() {
+    return client;
   }
 
+  public DrillbitContext getContext() {
+    return this.context;
+  }
 }

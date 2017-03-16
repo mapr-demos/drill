@@ -37,10 +37,10 @@ import org.apache.drill.exec.store.AbstractRecordReader;
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDB;
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 import org.apache.drill.exec.store.openTSDB.client.Schema;
-import org.apache.drill.exec.store.openTSDB.client.query.BaseQuery;
+import org.apache.drill.exec.store.openTSDB.client.query.DBQuery;
 import org.apache.drill.exec.store.openTSDB.client.query.Query;
 import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
-import org.apache.drill.exec.store.openTSDB.dto.Table;
+import org.apache.drill.exec.store.openTSDB.dto.MetricDTO;
 import org.apache.drill.exec.vector.NullableFloat8Vector;
 import org.apache.drill.exec.vector.NullableTimeStampVector;
 import org.apache.drill.exec.vector.NullableVarCharVector;
@@ -80,11 +80,11 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private final OpenTSDB client;
 
-  private Set<Table> showedTables = new HashSet<>();
+  private Set<MetricDTO> showedTables = new HashSet<>();
 
-  private Iterator<Table> tableIterator;
+  private Iterator<MetricDTO> tableIterator;
 
-  private Set<Table> tables;
+  private Set<MetricDTO> tables;
 
   private OutputMutator output;
   private OperatorContext context;
@@ -96,29 +96,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private Map<String, String> queryParameters;
 
-  private Table table;
-
-  @Override
-  protected boolean isSkipQuery() {
-    return super.isSkipQuery();
-  }
-
-  @Override
-  public void close() throws Exception {
-  }
-
-  private static class ProjectedColumnInfo {
-    ValueVector vv;
-    ColumnDTO openTSDBColumn;
-  }
-
-  static {
-    TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
-        .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
-        .put(OpenTSDBTypes.DOUBLE, MinorType.FLOAT8)
-        .put(OpenTSDBTypes.TIMESTAMP, MinorType.TIMESTAMP)
-        .build();
-  }
+  private MetricDTO metric;
 
   OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
                        List<SchemaPath> projectedColumns) throws IOException {
@@ -126,15 +104,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     this.client = client;
     setupQueryParam(subScanSpec.getTableName());
     log.debug("Scan spec: {}", subScanSpec);
-  }
-
-  private void setupQueryParam(String data) {
-    if (!isTableNameValid(data)) {
-      queryParameters = parseFROMRowData(data);
-    } else {
-      queryParameters = new HashMap<>();
-      queryParameters.put(METRIC, data);
-    }
   }
 
   @Override
@@ -145,7 +114,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     addColumnsNames();
     tables = getTablesFromDB();
     this.tableIterator = tables.iterator();
-    this.table = tableIterator.next();
+    this.metric = tableIterator.next();
     if (tables == null || tables.isEmpty()) {
       throw new ValidationError(String.format("Table '%s' not found or it's empty", queryParameters.get(METRIC)));
     }
@@ -160,7 +129,38 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     return processOpenTSDBTablesData();
   }
 
-  private Set<Table> getTablesFromDB() {
+  @Override
+  protected boolean isSkipQuery() {
+    return super.isSkipQuery();
+  }
+
+  @Override
+  public void close() throws Exception {
+  }
+
+  static {
+    TYPES = ImmutableMap.<OpenTSDBTypes, MinorType>builder()
+        .put(OpenTSDBTypes.STRING, MinorType.VARCHAR)
+        .put(OpenTSDBTypes.DOUBLE, MinorType.FLOAT8)
+        .put(OpenTSDBTypes.TIMESTAMP, MinorType.TIMESTAMP)
+        .build();
+  }
+
+  private static class ProjectedColumnInfo {
+    ValueVector vv;
+    ColumnDTO openTSDBColumn;
+  }
+
+  private void setupQueryParam(String data) {
+    if (!isTableNameValid(data)) {
+      queryParameters = parseFROMRowData(data);
+    } else {
+      queryParameters = new HashMap<>();
+      queryParameters.put(METRIC, data);
+    }
+  }
+
+  private Set<MetricDTO> getTablesFromDB() {
     try {
       return getAllMetricsFromDBByTags();
     } catch (IOException e) {
@@ -169,14 +169,14 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
   }
 
-  private Set<Table> getAllMetricsFromDBByTags() throws IOException {
+  private Set<MetricDTO> getAllMetricsFromDBByTags() throws IOException {
     Map<String, String> tags = new HashMap<>();
-    BaseQuery baseQuery = new BaseQuery();
+    DBQuery baseQuery = new DBQuery();
     Query subQuery = new Query();
 
-    setupBaseQuery(tags, baseQuery, subQuery);
+    setupBaseQuery(baseQuery, subQuery, tags);
 
-    Set<Table> tables =
+    Set<MetricDTO> tables =
         getBaseTables(baseQuery);
 
     Set<String> extractedTags =
@@ -191,11 +191,11 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     return tables;
   }
 
-  private Set<Table> getAllTablesWithSpecialTag(BaseQuery base) throws IOException {
+  private Set<MetricDTO> getAllTablesWithSpecialTag(DBQuery base) throws IOException {
     return client.getTables(base).execute().body();
   }
 
-  private Set<Table> getBaseTables(BaseQuery base) throws IOException {
+  private Set<MetricDTO> getBaseTables(DBQuery base) throws IOException {
     return getAllTablesWithSpecialTag(base);
   }
 
@@ -204,52 +204,52 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     tags.put(value, "*");
   }
 
-  private void setupBaseQuery(Map<String, String> tags, BaseQuery base, Query query) {
+  private void setupBaseQuery(DBQuery base, Query query, Map<String, String> tags) {
     setStartTimeInDBBaseQuery(base);
     setupSubQuery(tags, query);
     addSubQueryToBaseQuery(base, query);
   }
 
-  private void setupSubQuery(Map<String, String> tags, Query query) {
-    setAggregatorInQuery(query);
-    setMetricNameInQuery(query);
-    setDownsampleInQuery(query);
-    setEmptyTagMapInQuery(query, tags);
+  private void setupSubQuery(Map<String, String> tags, Query subQuery) {
+    setAggregatorInQuery(subQuery);
+    setMetricNameInQuery(subQuery);
+    setDownsampleInQuery(subQuery);
+    setEmptyTagMapInQuery(subQuery, tags);
   }
 
-  private void addSubQueryToBaseQuery(BaseQuery base, Query query) {
+  private void addSubQueryToBaseQuery(DBQuery base, Query subQuery) {
     Set<Query> queries = new HashSet<>();
-    queries.add(query);
+    queries.add(subQuery);
 
     base.setQueries(queries);
   }
 
-  private void setEmptyTagMapInQuery(Query query, Map<String, String> tags) {
-    query.setTags(tags);
+  private void setEmptyTagMapInQuery(Query subQuery, Map<String, String> tags) {
+    subQuery.setTags(tags);
   }
 
-  private void setDownsampleInQuery(Query query) {
+  private void setDownsampleInQuery(Query subQuery) {
     if (queryParameters.containsKey(DOWNSAMPLE)) {
-      query.setDownsample(queryParameters.get(DOWNSAMPLE));
+      subQuery.setDownsample(queryParameters.get(DOWNSAMPLE));
     }
   }
 
-  private void setMetricNameInQuery(Query query) {
-    query.setMetric(queryParameters.get(METRIC));
+  private void setMetricNameInQuery(Query subQuery) {
+    subQuery.setMetric(queryParameters.get(METRIC));
   }
 
-  private void setAggregatorInQuery(Query query) {
-    query.setAggregator(getProperty(AGGREGATOR, SUM_AGGREGATOR));
+  private void setAggregatorInQuery(Query subQuery) {
+    subQuery.setAggregator(getProperty(AGGREGATOR, SUM_AGGREGATOR));
   }
 
-  private void setStartTimeInDBBaseQuery(BaseQuery base) {
+  private void setStartTimeInDBBaseQuery(DBQuery base) {
     base.setStart(getProperty(TIME, DEFAULT_TIME));
   }
 
-  private Set<String> getTagsFromTables(Set<Table> tables) {
+  private Set<String> getTagsFromTables(Set<MetricDTO> tables) {
     Set<String> extractedTags = new HashSet<>();
 
-    for (Table table : tables) {
+    for (MetricDTO table : tables) {
       extractedTags.addAll(table.getAggregateTags());
       extractedTags.addAll(table.getTags().keySet());
     }
@@ -266,15 +266,15 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
 
     if (tableIterator != null) {
-      showedTables.add(table);
-      if (showedTables.contains(table)) {
-        if (setupTimestampIterator(table)) {
-          table = tableIterator.next();
+      showedTables.add(metric);
+      if (showedTables.contains(metric)) {
+        if (setupTimestampIterator(metric)) {
+          metric = tableIterator.next();
           showed.clear();
-          setupTimestampIterator(table);
+          setupTimestampIterator(metric);
         }
         try {
-          addRowResult(table);
+          addRowResult(metric);
           iterator.next();
           if (!iterator.hasNext() && !tableIterator.hasNext()) {
             tableIterator = null;
@@ -289,7 +289,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     return 0;
   }
 
-  private boolean setupTimestampIterator(Table table) {
+  private boolean setupTimestampIterator(MetricDTO table) {
     while (iterator == null || !iterator.hasNext()) {
       if (iterator != null && !iterator.hasNext()) {
         iterator = null;
@@ -321,7 +321,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
   }
 
-  private void addRowResult(Table table) throws SchemaChangeException{
+  private void addRowResult(MetricDTO table) throws SchemaChangeException {
     setupProjectedColsIfItNull();
 
     String timestamp = null;
@@ -345,7 +345,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
   }
 
-  private void setupDataToDrillTable(Table table, String timestamp, String value, Map<String, String> tags) {
+  private void setupDataToDrillTable(MetricDTO table, String timestamp, String value, Map<String, String> tags) {
     for (ProjectedColumnInfo pci : projectedCols) {
       switch (pci.openTSDBColumn.getColumnName()) {
         case "metric":

@@ -20,22 +20,12 @@ package org.apache.drill.exec.store.openTSDB.dto;
 import java.util.List;
 import java.util.Map;
 
-public class Table {
+public class MetricDTO {
 
   private String metric;
   private Map<String, String> tags;
   private List<String> aggregateTags;
   private Map<String, String> dps;
-
-  public Table() {
-  }
-
-  public Table(String metric, Map<String, String> tags, List<String> aggregateTags, Map<String, String> dps) {
-    this.metric = metric;
-    this.tags = tags;
-    this.aggregateTags = aggregateTags;
-    this.dps = dps;
-  }
 
   public String getMetric() {
     return metric;
@@ -78,7 +68,7 @@ public class Table {
       return false;
     }
 
-    Table table = (Table) o;
+    MetricDTO table = (MetricDTO) o;
 
     if (metric != null ? !metric.equals(table.metric) : table.metric != null) {
       return false;

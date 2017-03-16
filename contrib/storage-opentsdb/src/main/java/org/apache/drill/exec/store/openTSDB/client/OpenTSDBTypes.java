@@ -17,6 +17,10 @@
  */
 package org.apache.drill.exec.store.openTSDB.client;
 
+/**
+ * Types in openTSDB records,
+ * used for converting openTSDB data to Sql representation
+ */
 public enum OpenTSDBTypes {
   STRING,
   DOUBLE,

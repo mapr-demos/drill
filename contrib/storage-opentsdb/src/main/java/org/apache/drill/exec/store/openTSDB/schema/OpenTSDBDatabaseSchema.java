@@ -46,7 +46,7 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
 
   @Override
   public Table getTable(String tableName) {
-    if (isTableExist(tableName)) { // table does not exist
+    if (isTableExist(tableName)) {
       return null;
     }
 
@@ -55,11 +55,11 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
     }
 
     return drillTables.get(tableName);
-
   }
 
-  private boolean isTableExist(String tableName) {
-    return !tableNames.contains(tableName);
+  @Override
+  public String getTypeName() {
+    return OpenTSDBStoragePluginConfig.NAME;
   }
 
   @Override
@@ -67,9 +67,8 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
     return tableNames;
   }
 
-  @Override
-  public String getTypeName() {
-    return OpenTSDBStoragePluginConfig.NAME;
+  private boolean isTableExist(String tableName) {
+    return !tableNames.contains(tableName);
   }
 
 }

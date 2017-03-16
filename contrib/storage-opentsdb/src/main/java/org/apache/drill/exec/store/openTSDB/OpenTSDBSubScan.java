@@ -45,9 +45,9 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
   @JsonProperty
   public final OpenTSDBStoragePluginConfig storage;
 
+  private final List<SchemaPath> columns;
   private final OpenTSDBStoragePlugin openTSDBStoragePlugin;
   private final List<OpenTSDBSubScanSpec> tabletScanSpecList;
-  private final List<SchemaPath> columns;
 
   @JsonCreator
   public OpenTSDBSubScan(@JacksonInject StoragePluginRegistry registry,
@@ -70,17 +70,9 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
     this.columns = columns;
   }
 
-  public List<OpenTSDBSubScanSpec> getTabletScanSpecList() {
-    return tabletScanSpecList;
-  }
-
-  @JsonIgnore
-  public OpenTSDBStoragePluginConfig getStorageConfig() {
-    return storage;
-  }
-
-  public List<SchemaPath> getColumns() {
-    return columns;
+  @Override
+  public int getOperatorType() {
+    return 0;
   }
 
   @Override
@@ -88,9 +80,15 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
     return false;
   }
 
-  @JsonIgnore
-  public OpenTSDBStoragePlugin getStorageEngine() {
-    return openTSDBStoragePlugin;
+  @Override
+  public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) throws ExecutionSetupException {
+    Preconditions.checkArgument(children.isEmpty());
+    return new OpenTSDBSubScan(openTSDBStoragePlugin, storage, tabletScanSpecList, columns);
+  }
+
+  @Override
+  public Iterator<PhysicalOperator> iterator() {
+    return Collections.emptyIterator();
   }
 
   @Override
@@ -98,21 +96,22 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
     return physicalVisitor.visitSubScan(this, value);
   }
 
-  @Override
-  public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) throws ExecutionSetupException {
-    Preconditions.checkArgument(children.isEmpty());
-    return new OpenTSDBSubScan(openTSDBStoragePlugin, storage, tabletScanSpecList, columns);
-
+  public List<SchemaPath> getColumns() {
+    return columns;
   }
 
-  @Override
-  public int getOperatorType() {
-    return 0;
+  public List<OpenTSDBSubScanSpec> getTabletScanSpecList() {
+    return tabletScanSpecList;
   }
 
-  @Override
-  public Iterator<PhysicalOperator> iterator() {
-    return Collections.emptyIterator();
+  @JsonIgnore
+  public OpenTSDBStoragePlugin getStorageEngine() {
+    return openTSDBStoragePlugin;
+  }
+
+  @JsonIgnore
+  public OpenTSDBStoragePluginConfig getStorageConfig() {
+    return storage;
   }
 
   public static class OpenTSDBSubScanSpec {

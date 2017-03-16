@@ -21,19 +21,34 @@ import com.google.common.base.Splitter;
 import java.util.Map;
 
 public class Util {
-  public static Map<String, String> parseFROMRowData(String rowData) {
+
+  /**
+   * Parse FROM parameters to Map representation
+   *
+   * @param rowData with this syntax (metric=warp.speed.test)
+   * @return Map with params key: metric, value: warp.speed.test
+   */
+  static Map<String, String> parseFROMRowData(String rowData) {
     String FROMRowData = rowData.replaceAll("[()]", "");
     return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
   }
 
-  public static String validateTableName(String name) {
+  /**
+   * @param name Metric name
+   * @return Valid metric name
+   */
+  public static String getValidTableName(String name) {
     if (!isTableNameValid(name)) {
       name = parseFROMRowData(name).get("metric");
     }
     return name;
   }
 
-  public static boolean isTableNameValid(String name) {
+  /**
+   * @param name Metric name
+   * @return true if name is valid
+   */
+  static boolean isTableNameValid(String name) {
     return !name.contains("=");
   }
 }

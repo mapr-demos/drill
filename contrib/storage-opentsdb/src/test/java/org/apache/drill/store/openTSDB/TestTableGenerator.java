@@ -35,7 +35,6 @@ class TestTableGenerator {
 
   private static final String TEST_FILE_NAME = "tmp_input";
 
-  private static Socket socket;
   private static PrintWriter pw;
 
   static void setupTestData() throws Exception {
@@ -51,7 +50,7 @@ class TestTableGenerator {
   }
 
   private static void setupSocketConnection() throws IOException {
-    socket = new Socket(HOSTNAME, PORT);
+    Socket socket = new Socket(HOSTNAME, PORT);
     OutputStreamWriter stream = new OutputStreamWriter(socket.getOutputStream(), UTF_8);
     pw = new PrintWriter(stream, true);
   }

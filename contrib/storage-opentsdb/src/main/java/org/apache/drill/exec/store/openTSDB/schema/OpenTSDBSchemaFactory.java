@@ -39,13 +39,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.drill.exec.store.openTSDB.Util.validateTableName;
+import static org.apache.drill.exec.store.openTSDB.Util.getValidTableName;
 
 public class OpenTSDBSchemaFactory implements SchemaFactory {
 
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBSchemaFactory.class);
 
-  final private String schemaName;
+  private final String schemaName;
   private OpenTSDBStoragePlugin plugin;
 
   public OpenTSDBSchemaFactory(OpenTSDBStoragePlugin plugin, String schemaName) {
@@ -63,7 +63,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
 
     private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
 
-    public OpenTSDBTables(String name) {
+    OpenTSDBTables(String name) {
       super(ImmutableList.<String>of(), name);
     }
 
@@ -90,7 +90,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public Table getTable(String name) {
       OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
-      name = validateTableName(name);
+      name = getValidTableName(name);
       try {
         return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
       } catch (Exception e) {
@@ -128,8 +128,8 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
       return OpenTSDBStoragePluginConfig.NAME;
     }
 
-    DrillTable getDrillTable(String collectionName) {
-      OpenTSDBScanSpec openTSDBScanSpec = new OpenTSDBScanSpec(collectionName);
+    DrillTable getDrillTable(String tableName) {
+      OpenTSDBScanSpec openTSDBScanSpec = new OpenTSDBScanSpec(tableName);
       return new DynamicDrillTable(plugin, schemaName, null, openTSDBScanSpec);
     }
   }
