@@ -33,8 +33,6 @@ import java.io.IOException;
 
 public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBStoragePlugin.class);
-
   private final DrillbitContext context;
 
   private final OpenTSDBStoragePluginConfig engineConfig;

@@ -106,6 +106,8 @@ public class Schema {
     }
   }
 
+  //void methods must not do actions with parameters using object link
+  //to find such problems make all DTOs immutable
   private void findAllUnfixedColumns(Set<MetricDTO> tables) throws IOException {
     DBQuery base = new DBQuery();
     Query subQuery = new Query();
@@ -133,7 +135,8 @@ public class Schema {
     subQuery.setTags(tags);
   }
 
-  private void getAllMetrics(Set<MetricDTO> tables, DBQuery base, Set<String> tagNames, Map<String, String> tags) throws IOException {
+  private void getAllMetrics(Set<MetricDTO> tables, DBQuery base,
+                             Set<String> tagNames, Map<String, String> tags) throws IOException {
     for (String value : tagNames) {
       tags.clear();
       tags.put(value, "*");

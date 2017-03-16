@@ -30,8 +30,6 @@ import java.util.List;
 
 public class DrillOpenTSDBTable extends DynamicDrillTable {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(DrillOpenTSDBTable.class);
-
   private final Schema schema;
 
   public DrillOpenTSDBTable(String storageEngineName, OpenTSDBStoragePlugin plugin, Schema schema, OpenTSDBScanSpec scanSpec) {
@@ -41,12 +39,9 @@ public class DrillOpenTSDBTable extends DynamicDrillTable {
 
   @Override
   public RelDataType getRowType(final RelDataTypeFactory typeFactory) {
-
     List<String> names = Lists.newArrayList();
     List<RelDataType> types = Lists.newArrayList();
-
     convertToRelDataType(typeFactory, names, types);
-
     return typeFactory.createStructType(types, names);
   }
 

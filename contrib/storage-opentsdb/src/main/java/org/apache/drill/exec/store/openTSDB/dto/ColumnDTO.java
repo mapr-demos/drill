@@ -19,6 +19,8 @@ package org.apache.drill.exec.store.openTSDB.dto;
 
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 
+import java.util.Objects;
+
 public class ColumnDTO {
 
   private final String columnName;
@@ -41,25 +43,17 @@ public class ColumnDTO {
     return true;
   }
 
-
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
     ColumnDTO columnDTO = (ColumnDTO) o;
-
-    return (columnName != null ? columnName.equals(columnDTO.columnName) : columnDTO.columnName == null) && columnType == columnDTO.columnType;
+    return Objects.equals(columnName, columnDTO.columnName) &&
+            columnType == columnDTO.columnType;
   }
 
   @Override
   public int hashCode() {
-    int result = columnName != null ? columnName.hashCode() : 0;
-    result = 31 * result + (columnType != null ? columnType.hashCode() : 0);
-    return result;
+    return Objects.hash(columnName, columnType);
   }
 }

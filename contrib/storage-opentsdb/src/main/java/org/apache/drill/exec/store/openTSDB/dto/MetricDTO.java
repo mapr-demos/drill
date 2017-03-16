@@ -19,6 +19,7 @@ package org.apache.drill.exec.store.openTSDB.dto;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 public class MetricDTO {
 
@@ -61,34 +62,18 @@ public class MetricDTO {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
-    MetricDTO table = (MetricDTO) o;
-
-    if (metric != null ? !metric.equals(table.metric) : table.metric != null) {
-      return false;
-    }
-    if (tags != null ? !tags.equals(table.tags) : table.tags != null) {
-      return false;
-    }
-    if (aggregateTags != null ? !aggregateTags.equals(table.aggregateTags) : table.aggregateTags != null) {
-      return false;
-    }
-    return dps != null ? dps.equals(table.dps) : table.dps == null;
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
+    MetricDTO metricDTO = (MetricDTO) o;
+    return Objects.equals(metric, metricDTO.metric) &&
+            Objects.equals(tags, metricDTO.tags) &&
+            Objects.equals(aggregateTags, metricDTO.aggregateTags) &&
+            Objects.equals(dps, metricDTO.dps);
   }
 
   @Override
   public int hashCode() {
-    int result = metric != null ? metric.hashCode() : 0;
-    result = 31 * result + (tags != null ? tags.hashCode() : 0);
-    result = 31 * result + (aggregateTags != null ? aggregateTags.hashCode() : 0);
-    result = 31 * result + (dps != null ? dps.hashCode() : 0);
-    return result;
+    return Objects.hash(metric, tags, aggregateTags, dps);
   }
 
   @Override

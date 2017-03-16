@@ -32,8 +32,11 @@ import org.apache.drill.exec.store.RecordReader;
 import java.util.List;
 
 public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
+
   @Override
-  public CloseableRecordBatch getBatch(FragmentContext context, OpenTSDBSubScan subScan, List<RecordBatch> children) throws ExecutionSetupException {
+  public CloseableRecordBatch getBatch(FragmentContext context, OpenTSDBSubScan subScan,
+                                       List<RecordBatch> children) throws ExecutionSetupException {
+    //what propose of this null check?
     Preconditions.checkArgument(children.isEmpty());
     List<RecordReader> readers = Lists.newArrayList();
     List<SchemaPath> columns;
@@ -44,8 +47,8 @@ public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
           columns = GroupScan.ALL_COLUMNS;
         }
         readers.add(new OpenTSDBRecordReader(subScan.getStorageEngine().getClient(), scanSpec, columns));
-      } catch (Exception e1) {
-        throw new ExecutionSetupException(e1);
+      } catch (Exception e) {
+        throw new ExecutionSetupException(e);
       }
     }
     return new ScanBatch(subScan, context, readers.iterator());

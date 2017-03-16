@@ -75,27 +75,19 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   private static final String METRIC = "metric";
   private static final String AGGREGATOR = "aggregator";
   private static final String DOWNSAMPLE = "downsample";
-
   private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
   private final OpenTSDB client;
 
   private Set<MetricDTO> showedTables = new HashSet<>();
-
   private Iterator<MetricDTO> tableIterator;
-
   private Set<MetricDTO> tables;
-
   private OutputMutator output;
   private OperatorContext context;
-
   private Iterator iterator;
   private List<String> showed = new ArrayList<>();
-
   private ImmutableList<ProjectedColumnInfo> projectedCols;
-
   private Map<String, String> queryParameters;
-
   private MetricDTO metric;
 
   OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,

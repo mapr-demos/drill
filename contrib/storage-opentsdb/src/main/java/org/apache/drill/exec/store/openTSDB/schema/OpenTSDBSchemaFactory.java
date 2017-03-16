@@ -60,9 +60,8 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
   }
 
   class OpenTSDBTables extends AbstractSchema {
-
     private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
-
+    //Collections.emptyList() ?
     OpenTSDBTables(String name) {
       super(ImmutableList.<String>of(), name);
     }

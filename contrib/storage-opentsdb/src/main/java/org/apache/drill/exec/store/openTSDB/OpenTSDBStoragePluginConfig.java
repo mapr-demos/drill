@@ -23,11 +23,10 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 import org.apache.drill.common.logical.StoragePluginConfigBase;
 
 import java.io.IOException;
+import java.util.Objects;
 
 @JsonTypeName(OpenTSDBStoragePluginConfig.NAME)
 public class OpenTSDBStoragePluginConfig extends StoragePluginConfigBase {
-
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBStoragePluginConfig.class);
 
   public static final String NAME = "openTSDB";
 
@@ -44,16 +43,10 @@ public class OpenTSDBStoragePluginConfig extends StoragePluginConfigBase {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) {
-      return true;
-    }
-    if (o == null || getClass() != o.getClass()) {
-      return false;
-    }
-
+    if (this == o) return true;
+    if (o == null || getClass() != o.getClass()) return false;
     OpenTSDBStoragePluginConfig that = (OpenTSDBStoragePluginConfig) o;
-
-    return connection != null ? connection.equals(that.connection) : that.connection == null;
+    return Objects.equals(connection, that.connection);
   }
 
   @Override

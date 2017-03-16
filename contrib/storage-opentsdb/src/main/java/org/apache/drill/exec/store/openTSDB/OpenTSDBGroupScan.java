@@ -46,11 +46,10 @@ import java.io.IOException;
 import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
 
 @JsonTypeName("openTSDB-scan")
 public class OpenTSDBGroupScan extends AbstractGroupScan {
-
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBGroupScan.class);
 
   private static final long DEFAULT_TABLET_SIZE = 1000;
 
@@ -136,12 +135,14 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
   @Override
   public ScanStats getScanStats() {
+    //magic number ?
     long recordCount = 100000L * openTSDBWorkList.size();
     return new ScanStats(ScanStats.GroupScanProperty.NO_EXACT_ROW_COUNT, recordCount, 1, recordCount);
   }
 
   @Override
   @JsonIgnore
+  //json ignore on methods ? why ?
   public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) {
     Preconditions.checkArgument(children.isEmpty());
     return new OpenTSDBGroupScan(this);
@@ -154,6 +155,7 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
   @Override
   @JsonIgnore
+  //json ignore on methods ? why ?
   public boolean canPushdownProjects(List<SchemaPath> columns) {
     return true;
   }
@@ -197,21 +199,15 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
     @Override
     public boolean equals(Object o) {
-      if (this == o) {
-        return true;
-      }
-      if (o == null || getClass() != o.getClass()) {
-        return false;
-      }
-
+      if (this == o) return true;
+      if (o == null || getClass() != o.getClass()) return false;
       OpenTSDBWork that = (OpenTSDBWork) o;
-
-      return byteMap != null ? byteMap.equals(that.byteMap) : that.byteMap == null;
+      return Objects.equals(byteMap, that.byteMap);
     }
 
     @Override
     public int hashCode() {
-      return byteMap != null ? byteMap.hashCode() : 0;
+      return Objects.hash(byteMap);
     }
 
     @Override

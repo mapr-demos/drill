@@ -22,8 +22,6 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 
 public class OpenTSDBScanSpec {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBScanSpec.class);
-
   private final String tableName;
 
   @JsonCreator
