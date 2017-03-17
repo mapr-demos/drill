@@ -94,7 +94,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
                        List<SchemaPath> projectedColumns) throws IOException {
     setColumns(projectedColumns);
     this.client = client;
-    setupQueryParam(subScanSpec.getTableName());
+    queryParameters = setupQueryParam(subScanSpec.getTableName());
     log.debug("Scan spec: {}", subScanSpec);
   }
 
@@ -103,7 +103,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     this.output = output;
     this.context = context;
 
-    addColumnsNames();
     tables = getTablesFromDB();
     this.tableIterator = tables.iterator();
     this.metric = tableIterator.next();
@@ -143,12 +142,13 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     ColumnDTO openTSDBColumn;
   }
 
-  private void setupQueryParam(String data) {
+  private Map<String, String> setupQueryParam(String data) {
     if (!isTableNameValid(data)) {
-      queryParameters = parseFROMRowData(data);
+      return parseFROMRowData(data);
     } else {
-      queryParameters = new HashMap<>();
-      queryParameters.put(METRIC, data);
+      Map<String, String> params = new HashMap<>();
+      params.put(METRIC, data);
+      return params;
     }
   }
 
@@ -296,15 +296,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private boolean isTablesListEmpty() {
     return tables.size() == 0;
-  }
-
-  private void addColumnsNames() {
-    if (!isStarQuery()) {
-      List<String> colNames = Lists.newArrayList();
-      for (SchemaPath p : this.getColumns()) {
-        colNames.add(p.getAsUnescapedPath());
-      }
-    }
   }
 
   private void setValueCountForMutator() {

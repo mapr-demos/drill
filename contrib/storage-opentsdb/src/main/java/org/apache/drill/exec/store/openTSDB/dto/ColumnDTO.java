@@ -45,11 +45,15 @@ public class ColumnDTO {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     ColumnDTO columnDTO = (ColumnDTO) o;
     return Objects.equals(columnName, columnDTO.columnName) &&
-            columnType == columnDTO.columnType;
+        columnType == columnDTO.columnType;
   }
 
   @Override

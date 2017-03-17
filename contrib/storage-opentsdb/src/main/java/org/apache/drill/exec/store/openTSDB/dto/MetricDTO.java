@@ -32,43 +32,32 @@ public class MetricDTO {
     return metric;
   }
 
-  public void setMetric(String metric) {
-    this.metric = metric;
-  }
-
   public Map<String, String> getTags() {
     return tags;
-  }
-
-  public void setTags(Map<String, String> tags) {
-    this.tags = tags;
   }
 
   public List<String> getAggregateTags() {
     return aggregateTags;
   }
 
-  public void setAggregateTags(List<String> aggregateTags) {
-    this.aggregateTags = aggregateTags;
-  }
-
   public Map<String, String> getDps() {
     return dps;
   }
 
-  public void setDps(Map<String, String> dps) {
-    this.dps = dps;
-  }
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) {
+      return true;
+    }
+    if (o == null || getClass() != o.getClass()) {
+      return false;
+    }
     MetricDTO metricDTO = (MetricDTO) o;
     return Objects.equals(metric, metricDTO.metric) &&
-            Objects.equals(tags, metricDTO.tags) &&
-            Objects.equals(aggregateTags, metricDTO.aggregateTags) &&
-            Objects.equals(dps, metricDTO.dps);
+        Objects.equals(tags, metricDTO.tags) &&
+        Objects.equals(aggregateTags, metricDTO.aggregateTags) &&
+        Objects.equals(dps, metricDTO.dps);
   }
 
   @Override

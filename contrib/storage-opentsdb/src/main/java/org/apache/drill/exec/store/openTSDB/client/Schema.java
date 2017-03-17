@@ -60,7 +60,7 @@ public class Schema {
       columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
       columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
       columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
-      addUnfixedColumnsToSchema();
+      columns.addAll(getUnfixedColumnsToSchema());
     } catch (IOException ie) {
       log.warn("A problem occurred when talking to the server", ie);
     }
@@ -92,63 +92,68 @@ public class Schema {
     return columns.get(columnIndex);
   }
 
-  private void addUnfixedColumnsToSchema() throws IOException {
-    Set<MetricDTO> tables = getBasicTable();
-    findAllUnfixedColumns(tables);
+  private List<ColumnDTO> getUnfixedColumnsToSchema() throws IOException {
+    Set<MetricDTO> tables = findAllMetricsByTagsFromBasicTable(getBasicTable());
+    List<ColumnDTO> unfixedColumns = new ArrayList<>();
 
     for (MetricDTO table : tables) {
       for (String tag : table.getTags().keySet()) {
         ColumnDTO tmp = new ColumnDTO(tag, OpenTSDBTypes.STRING);
-        if (!columns.contains(tmp)) {
-          columns.add(tmp);
+        if (!unfixedColumns.contains(tmp)) {
+          unfixedColumns.add(tmp);
         }
       }
     }
+    return unfixedColumns;
   }
 
-  //void methods must not do actions with parameters using object link
-  //to find such problems make all DTOs immutable
-  private void findAllUnfixedColumns(Set<MetricDTO> tables) throws IOException {
+  private Set<MetricDTO> findAllMetricsByTagsFromBasicTable(Set<MetricDTO> basicTables) throws IOException {
     DBQuery base = new DBQuery();
-    Query subQuery = new Query();
+    Set<Query> subQueries = new HashSet<>();
 
-    Set<Query> queries = new HashSet<>();
+    Set<MetricDTO> resultedTables = new HashSet<>();
 
     Set<String> extractedTags = new HashSet<>();
     Map<String, String> tags = new HashMap<>();
 
     base.setStart(DEFAULT_TIME);
-    setupSubQuery(subQuery, tags);
-    queries.add(subQuery);
 
-    base.setQueries(queries);
+    subQueries.add(getSubQuery(tags));
+    base.setQueries(subQueries);
 
-    extractTags(tables, extractedTags);
-    tables.clear();
+    extractedTags.addAll(extractTags(basicTables));
+    resultedTables.addAll(getAllMetrics(base, getSubQuery(tags), extractedTags));
 
-    getAllMetrics(tables, base, extractedTags, tags);
+    return resultedTables;
   }
 
-  private void setupSubQuery(Query subQuery, Map<String, String> tags) {
+  private Query getSubQuery(Map<String, String> tags) {
+    Query subQuery = new Query();
     subQuery.setAggregator(SUM_AGGREGATOR);
     subQuery.setMetric(metricName);
     subQuery.setTags(tags);
+    return subQuery;
   }
 
-  private void getAllMetrics(Set<MetricDTO> tables, DBQuery base,
-                             Set<String> tagNames, Map<String, String> tags) throws IOException {
+  private Set<MetricDTO> getAllMetrics(DBQuery base, Query query,
+                             Set<String> tagNames) throws IOException {
+    Set<MetricDTO> metrics = new HashSet<>();
     for (String value : tagNames) {
-      tags.clear();
+      Map<String, String> tags = new HashMap<>();
       tags.put(value, "*");
-      tables.addAll(client.getTables(base).execute().body());
+      query.setTags(tags);
+      metrics.addAll(client.getTables(base).execute().body());
     }
+    return metrics;
   }
 
-  private void extractTags(Set<MetricDTO> tables, Set<String> taguni) {
+  private Set<String> extractTags(Set<MetricDTO> tables) {
+    Set<String> tags = new HashSet<>();
     for (MetricDTO table : tables) {
-      taguni.addAll(table.getAggregateTags());
-      taguni.addAll(table.getTags().keySet());
+      tags.addAll(table.getAggregateTags());
+      tags.addAll(table.getTags().keySet());
     }
+    return tags;
   }
 
   private Set<MetricDTO> getBasicTable() throws IOException {

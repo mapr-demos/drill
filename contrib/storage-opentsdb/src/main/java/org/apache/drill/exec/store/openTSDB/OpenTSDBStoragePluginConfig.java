@@ -43,8 +43,8 @@ public class OpenTSDBStoragePluginConfig extends StoragePluginConfigBase {
 
   @Override
   public boolean equals(Object o) {
-    if (this == o) return true;
-    if (o == null || getClass() != o.getClass()) return false;
+    if (this == o) { return true; }
+    if (o == null || getClass() != o.getClass()) { return false; }
     OpenTSDBStoragePluginConfig that = (OpenTSDBStoragePluginConfig) o;
     return Objects.equals(connection, that.connection);
   }
