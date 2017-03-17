@@ -142,7 +142,6 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
   @Override
   @JsonIgnore
-  //json ignore on methods ? why ?
   public PhysicalOperator getNewWithChildren(List<PhysicalOperator> children) {
     Preconditions.checkArgument(children.isEmpty());
     return new OpenTSDBGroupScan(this);
@@ -155,7 +154,6 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
   @Override
   @JsonIgnore
-  //json ignore on methods ? why ?
   public boolean canPushdownProjects(List<SchemaPath> columns) {
     return true;
   }

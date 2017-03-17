@@ -28,8 +28,6 @@ import static java.nio.charset.StandardCharsets.UTF_8;
 
 class TestTableGenerator {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(TestTableGenerator.class);
-
   private static final int PORT = 4242; //replace with your port
   private static final String HOSTNAME = "1.2.3.4"; //replace with the node where tsd runs
 

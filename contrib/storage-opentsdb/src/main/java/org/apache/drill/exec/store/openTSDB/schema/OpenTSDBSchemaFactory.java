@@ -17,7 +17,6 @@
  */
 package org.apache.drill.exec.store.openTSDB.schema;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Maps;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
@@ -61,9 +60,8 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
 
   class OpenTSDBTables extends AbstractSchema {
     private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
-    //Collections.emptyList() ?
     OpenTSDBTables(String name) {
-      super(ImmutableList.<String>of(), name);
+      super(Collections.<String>emptyList(), name);
     }
 
     @Override

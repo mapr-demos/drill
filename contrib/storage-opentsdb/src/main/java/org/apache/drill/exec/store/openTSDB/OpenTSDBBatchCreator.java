@@ -17,7 +17,6 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
-import com.google.common.base.Preconditions;
 import com.google.common.collect.Lists;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -36,8 +35,6 @@ public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
   @Override
   public CloseableRecordBatch getBatch(FragmentContext context, OpenTSDBSubScan subScan,
                                        List<RecordBatch> children) throws ExecutionSetupException {
-    //what propose of this null check?
-    Preconditions.checkArgument(children.isEmpty());
     List<RecordReader> readers = Lists.newArrayList();
     List<SchemaPath> columns;
 
