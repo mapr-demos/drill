@@ -19,7 +19,6 @@ package org.apache.drill.exec.store.openTSDB;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Lists;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
@@ -104,11 +103,12 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     this.context = context;
 
     tables = getTablesFromDB();
-    this.tableIterator = tables.iterator();
-    this.metric = tableIterator.next();
     if (tables == null || tables.isEmpty()) {
       throw new ValidationError(String.format("Table '%s' not found or it's empty", queryParameters.get(METRIC)));
     }
+
+    this.tableIterator = tables.iterator();
+    this.metric = tableIterator.next();
   }
 
   @Override

@@ -23,21 +23,21 @@ import org.junit.Assert;
 
 import java.util.List;
 
-public class TestBase extends PlanTestBase {
+class TestBase extends PlanTestBase {
 
-  public List<QueryDataBatch> runSQLWithResults(String sql)
-      throws Exception {
-    return testSqlWithResults(sql);
-  }
-
-  public void runSQLVerifyCount(String sql, int expectedRowCount)
+  void runSQLVerifyCount(String sql, int expectedRowCount)
       throws Exception {
     List<QueryDataBatch> results = runSQLWithResults(sql);
     printResultAndVerifyRowCount(results, expectedRowCount);
   }
 
-  public void printResultAndVerifyRowCount(List<QueryDataBatch> results,
-                                           int expectedRowCount) throws SchemaChangeException {
+  private List<QueryDataBatch> runSQLWithResults(String sql)
+      throws Exception {
+    return testSqlWithResults(sql);
+  }
+
+  private void printResultAndVerifyRowCount(List<QueryDataBatch> results,
+                                            int expectedRowCount) throws SchemaChangeException {
     setColumnWidth(30);
     int rowCount = printResult(results);
     if (expectedRowCount != -1) {
