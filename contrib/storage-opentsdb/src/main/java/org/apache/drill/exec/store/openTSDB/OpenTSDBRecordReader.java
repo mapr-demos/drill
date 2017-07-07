@@ -47,7 +47,6 @@ import org.apache.drill.exec.vector.ValueVector;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -57,6 +56,12 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.drill.exec.store.openTSDB.Constants.AGGREGATOR;
+import static org.apache.drill.exec.store.openTSDB.Constants.DEFAULT_TIME;
+import static org.apache.drill.exec.store.openTSDB.Constants.DOWNSAMPLE;
+import static org.apache.drill.exec.store.openTSDB.Constants.METRIC;
+import static org.apache.drill.exec.store.openTSDB.Constants.SUM_AGGREGATOR;
+import static org.apache.drill.exec.store.openTSDB.Constants.TIME;
 import static org.apache.drill.exec.store.openTSDB.Util.isTableNameValid;
 import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
 
@@ -64,30 +69,14 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBRecordReader.class);
 
-  /**
-   * openTSDB required constants for API call
-   */
-  public static final String DEFAULT_TIME = "47y-ago";
-  public static final String SUM_AGGREGATOR = "sum";
-
-  private static final String TIME = "time";
-  private static final String METRIC = "metric";
-  private static final String AGGREGATOR = "aggregator";
-  private static final String DOWNSAMPLE = "downsample";
   private static final Map<OpenTSDBTypes, MinorType> TYPES;
 
   private final OpenTSDB client;
 
-  private Set<MetricDTO> showedTables = new HashSet<>();
   private Iterator<MetricDTO> tableIterator;
-  private Set<MetricDTO> tables;
   private OutputMutator output;
-  private OperatorContext context;
-  private Iterator iterator;
-  private List<String> showed = new ArrayList<>();
   private ImmutableList<ProjectedColumnInfo> projectedCols;
   private Map<String, String> queryParameters;
-  private MetricDTO metric;
 
   OpenTSDBRecordReader(OpenTSDB client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
                        List<SchemaPath> projectedColumns) throws IOException {
@@ -100,24 +89,21 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   @Override
   public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
     this.output = output;
-    this.context = context;
 
-    tables = getTablesFromDB();
+    Set<MetricDTO> tables = getTablesFromDB();
     if (tables == null || tables.isEmpty()) {
       throw new ValidationError(String.format("Table '%s' not found or it's empty", queryParameters.get(METRIC)));
     }
-
     this.tableIterator = tables.iterator();
-    this.metric = tableIterator.next();
   }
 
   @Override
   public int next() {
-    if (isTablesListEmpty()) {
-      iterator = null;
+    try {
+      return processOpenTSDBTablesData();
+    } catch (SchemaChangeException e) {
       return 0;
     }
-    return processOpenTSDBTablesData();
   }
 
   @Override
@@ -254,72 +240,23 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         queryParameters.get(propertyName) : defaultValue;
   }
 
-  private int processOpenTSDBTablesData() {
-
-
-    if (tableIterator != null) {
-      showedTables.add(metric);
-      if (showedTables.contains(metric)) {
-        if (setupTimestampIterator(metric)) {
-          metric = tableIterator.next();
-          showed.clear();
-          setupTimestampIterator(metric);
-        }
-        try {
-          addRowResult(metric);
-          iterator.next();
-          if (!iterator.hasNext() && !tableIterator.hasNext()) {
-            tableIterator = null;
-          }
-        } catch (SchemaChangeException sce) {
-          log.warn("the addition of this field is incompatible with this OutputMutator's capabilities", sce);
-        }
-        setValueCountForMutator();
-        return 1;
-      }
+  private int processOpenTSDBTablesData() throws SchemaChangeException {
+    int rowCounter = 0;
+    while (tableIterator.hasNext()) {
+      MetricDTO metricDTO = tableIterator.next();
+      rowCounter = addRowResult(metricDTO, rowCounter);
     }
-    return 0;
+    return rowCounter;
   }
 
-  private boolean setupTimestampIterator(MetricDTO table) {
-    while (iterator == null || !iterator.hasNext()) {
-      if (iterator != null && !iterator.hasNext()) {
-        iterator = null;
-        return true;
-      }
-      context.getStats().startWait();
-      iterator = table.getDps().keySet().iterator();
-      context.getStats().stopWait();
-    }
-    return false;
-  }
-
-  private boolean isTablesListEmpty() {
-    return tables.size() == 0;
-  }
-
-  private void setValueCountForMutator() {
-    for (ProjectedColumnInfo pci : projectedCols) {
-      pci.vv.getMutator().setValueCount(1);
-    }
-  }
-
-  private void addRowResult(MetricDTO table) throws SchemaChangeException {
+  private int addRowResult(MetricDTO table, int rowCounter) throws SchemaChangeException {
     setupProjectedColsIfItNull();
-
-    String timestamp = null;
-    String value = null;
-
     for (String time : table.getDps().keySet()) {
-      if (!showed.contains(time)) {
-        timestamp = time;
-        value = table.getDps().get(time);
-        showed.add(time);
-        break;
-      }
+      String value = table.getDps().get(time);
+      setupDataToDrillTable(table, time, value, table.getTags(), rowCounter);
+      rowCounter++;
     }
-
-    setupDataToDrillTable(table, timestamp, value, table.getTags());
+    return rowCounter;
   }
 
   private void setupProjectedColsIfItNull() throws SchemaChangeException {
@@ -328,52 +265,52 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     }
   }
 
-  private void setupDataToDrillTable(MetricDTO table, String timestamp, String value, Map<String, String> tags) {
+  private void setupDataToDrillTable(MetricDTO table, String timestamp, String value, Map<String, String> tags, int rowCount) {
     for (ProjectedColumnInfo pci : projectedCols) {
       switch (pci.openTSDBColumn.getColumnName()) {
         case "metric":
-          setStringColumnValue(table.getMetric(), pci);
+          setStringColumnValue(table.getMetric(), pci, rowCount);
           break;
         case "aggregate tags":
-          setStringColumnValue(table.getAggregateTags().toString(), pci);
+          setStringColumnValue(table.getAggregateTags().toString(), pci, rowCount);
           break;
         case "timestamp":
-          setTimestampColumnValue(timestamp, pci);
+          setTimestampColumnValue(timestamp, pci, rowCount);
           break;
         case "aggregated value":
-          setDoubleColumnValue(value, pci);
+          setDoubleColumnValue(value, pci, rowCount);
           break;
         default:
-          setStringColumnValue(tags.get(pci.openTSDBColumn.getColumnName()), pci);
+          setStringColumnValue(tags.get(pci.openTSDBColumn.getColumnName()), pci, rowCount);
       }
     }
   }
 
-  private void setTimestampColumnValue(String timestamp, ProjectedColumnInfo pci) {
-    setTimestampColumnValue(timestamp != null ? Long.parseLong(timestamp) : Long.parseLong("0"), pci);
+  private void setTimestampColumnValue(String timestamp, ProjectedColumnInfo pci, int rowCount) {
+    setTimestampColumnValue(timestamp != null ? Long.parseLong(timestamp) : Long.parseLong("0"), pci, rowCount);
   }
 
-  private void setDoubleColumnValue(String value, ProjectedColumnInfo pci) {
-    setDoubleColumnValue(value != null ? Double.parseDouble(value) : 0.0, pci);
+  private void setDoubleColumnValue(String value, ProjectedColumnInfo pci, int rowCount) {
+    setDoubleColumnValue(value != null ? Double.parseDouble(value) : 0.0, pci, rowCount);
   }
 
-  private void setStringColumnValue(String data, ProjectedColumnInfo pci) {
+  private void setStringColumnValue(String data, ProjectedColumnInfo pci, int rowCount) {
     if (data == null) {
       data = "null";
     }
     ByteBuffer value = ByteBuffer.wrap(data.getBytes(UTF_8));
     ((NullableVarCharVector.Mutator) pci.vv.getMutator())
-        .setSafe(0, value, 0, value.remaining());
+        .setSafe(rowCount, value, 0, value.remaining());
   }
 
-  private void setTimestampColumnValue(Long data, ProjectedColumnInfo pci) {
+  private void setTimestampColumnValue(Long data, ProjectedColumnInfo pci, int rowCount) {
     ((NullableTimeStampVector.Mutator) pci.vv.getMutator())
-        .setSafe(0, data * 1000);
+        .setSafe(rowCount, data * 1000);
   }
 
-  private void setDoubleColumnValue(Double data, ProjectedColumnInfo pci) {
+  private void setDoubleColumnValue(Double data, ProjectedColumnInfo pci, int rowCount) {
     ((NullableFloat8Vector.Mutator) pci.vv.getMutator())
-        .setSafe(0, data);
+        .setSafe(rowCount, data);
   }
 
   private void initCols(Schema schema) throws SchemaChangeException {

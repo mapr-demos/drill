@@ -31,8 +31,8 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.drill.exec.store.openTSDB.OpenTSDBRecordReader.DEFAULT_TIME;
-import static org.apache.drill.exec.store.openTSDB.OpenTSDBRecordReader.SUM_AGGREGATOR;
+import static org.apache.drill.exec.store.openTSDB.Constants.DEFAULT_TIME;
+import static org.apache.drill.exec.store.openTSDB.Constants.SUM_AGGREGATOR;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATED_VALUE;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATE_TAGS;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.METRIC;

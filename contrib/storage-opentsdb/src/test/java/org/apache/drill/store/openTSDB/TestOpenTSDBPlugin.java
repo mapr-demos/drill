@@ -52,7 +52,7 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
     base = new TestBase();
   }
 
-  void setupGETStubs() {
+  private void setupGETStubs() {
     stubFor(get(urlEqualTo("/api/suggest?type=metrics&max=999"))
         .willReturn(aResponse()
             .withStatus(200)
@@ -72,7 +72,7 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
         ));
   }
 
-  void setupPOSTStubs() {
+  private void setupPOSTStubs() {
 
     stubFor(post(urlEqualTo("/api/query"))
         .withRequestBody(equalToJson(POST_REQUEST_WITHOUT_TAGS))
