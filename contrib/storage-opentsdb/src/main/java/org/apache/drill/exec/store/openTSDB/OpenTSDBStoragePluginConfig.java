@@ -37,7 +37,7 @@ public class OpenTSDBStoragePluginConfig extends StoragePluginConfigBase {
     this.connection = connection;
   }
 
-  public String getConnection() {
+  String getConnection() {
     return connection;
   }
 

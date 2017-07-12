@@ -31,6 +31,8 @@ import org.apache.drill.exec.store.openTSDB.OpenTSDBScanSpec;
 import org.apache.drill.exec.store.openTSDB.OpenTSDBStoragePlugin;
 import org.apache.drill.exec.store.openTSDB.OpenTSDBStoragePluginConfig;
 import org.apache.drill.exec.store.openTSDB.client.Schema;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
@@ -42,7 +44,7 @@ import static org.apache.drill.exec.store.openTSDB.Util.getValidTableName;
 
 public class OpenTSDBSchemaFactory implements SchemaFactory {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBSchemaFactory.class);
+  private static final Logger log = LoggerFactory.getLogger(OpenTSDBSchemaFactory.class);
 
   private final String schemaName;
   private OpenTSDBStoragePlugin plugin;
@@ -68,16 +70,11 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public AbstractSchema getSubSchema(String name) {
       Set<String> tables;
-      try {
-        if (!schemaMap.containsKey(name)) {
-          tables = plugin.getClient().getAllTablesName().execute().body();
-          schemaMap.put(name, new OpenTSDBDatabaseSchema(tables, this, name));
-        }
-        return schemaMap.get(name);
-      } catch (IOException e) {
-        log.warn("A problem occurred when talking to the server", e);
-        return null;
+      if (!schemaMap.containsKey(name)) {
+        tables = plugin.getClient().getAllTableNames();
+        schemaMap.put(name, new OpenTSDBDatabaseSchema(tables, this, name));
       }
+      return schemaMap.get(name);
     }
 
     @Override
@@ -99,12 +96,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
 
     @Override
     public Set<String> getTableNames() {
-      try {
-        return plugin.getClient().getAllTablesName().execute().body();
-      } catch (Exception e) {
-        log.warn("Failure reading openTSDB tables.", e);
-        return Collections.emptySet();
-      }
+      return plugin.getClient().getAllTableNames();
     }
 
     @Override

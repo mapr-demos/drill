@@ -34,6 +34,7 @@ import static org.apache.drill.store.openTSDB.TestDataHolder.DOWNSAMPLE_REQUEST_
 import static org.apache.drill.store.openTSDB.TestDataHolder.DOWNSAMPLE_REQUEST_WTIHOUT_TAGS;
 import static org.apache.drill.store.openTSDB.TestDataHolder.POST_REQUEST_WITHOUT_TAGS;
 import static org.apache.drill.store.openTSDB.TestDataHolder.POST_REQUEST_WITH_TAGS;
+import static org.apache.drill.store.openTSDB.TestDataHolder.REQUEST_TO_NONEXISTENT_METRIC;
 import static org.apache.drill.store.openTSDB.TestDataHolder.SAMPLE_DATA_FOR_GET_TABLE_NAME_REQUEST;
 import static org.apache.drill.store.openTSDB.TestDataHolder.SAMPLE_DATA_FOR_GET_TABLE_REQUEST;
 import static org.apache.drill.store.openTSDB.TestDataHolder.SAMPLE_DATA_FOR_POST_DOWNSAMPLE_REQUEST_WITHOUT_TAGS;
@@ -58,12 +59,6 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
             .withStatus(200)
             .withHeader("Content-Type", "application/json")
             .withBody(SAMPLE_DATA_FOR_GET_TABLE_NAME_REQUEST)));
-
-    stubFor(get(urlEqualTo("/api/query?start=47y-ago&m=sum:warp.spee"))
-        .willReturn(aResponse()
-            .withStatus(400)
-            .withHeader("Content-Type", "application/json")
-        ));
 
     stubFor(get(urlEqualTo("/api/query?start=47y-ago&m=sum:warp.speed.test"))
         .willReturn(aResponse()
@@ -101,6 +96,13 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
             .withStatus(200)
             .withHeader("Content-Type", "application/json")
             .withBody(SAMPLE_DATA_FOR_POST_DOWNSAMPLE_REQUEST_WITH_TAGS)));
+
+    stubFor(post(urlEqualTo("/api/query"))
+        .withRequestBody(equalToJson(REQUEST_TO_NONEXISTENT_METRIC))
+        .willReturn(aResponse()
+            .withStatus(400)
+            .withHeader("Content-Type", "application/json")
+        ));
   }
 
   @Test
@@ -145,7 +147,7 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
 
   @Test(expected = UserRemoteException.class)
   public void testBasicQueryWithNonExistentTableName() throws Exception {
-    setupGETStubs();
+    setupPOSTStubs();
     test("select * from openTSDB.`warp.spee`");
   }
 

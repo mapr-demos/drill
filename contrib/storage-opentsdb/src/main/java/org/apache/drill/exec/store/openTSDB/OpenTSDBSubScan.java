@@ -31,6 +31,8 @@ import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.base.PhysicalVisitor;
 import org.apache.drill.exec.physical.base.SubScan;
 import org.apache.drill.exec.store.StoragePluginRegistry;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Collections;
 import java.util.Iterator;
@@ -40,7 +42,8 @@ import java.util.List;
 @JsonTypeName("openTSDB-tablet-scan")
 public class OpenTSDBSubScan extends AbstractBase implements SubScan {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBSubScan.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(OpenTSDBSubScan.class);
 
   @JsonProperty
   public final OpenTSDBStoragePluginConfig storage;

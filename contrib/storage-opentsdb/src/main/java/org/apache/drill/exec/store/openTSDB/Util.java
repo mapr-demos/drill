@@ -29,7 +29,7 @@ public class Util {
    * @param rowData with this syntax (metric=warp.speed.test)
    * @return Map with params key: metric, value: warp.speed.test
    */
-  static Map<String, String> parseFROMRowData(String rowData) {
+  public static Map<String, String> parseFROMRowData(String rowData) {
     String FROMRowData = rowData.replaceAll("[()]", "");
     return Splitter.on(",").trimResults().omitEmptyStrings().withKeyValueSeparator("=").split(FROMRowData);
   }
@@ -49,7 +49,7 @@ public class Util {
    * @param name Metric name
    * @return true if name is valid
    */
-  static boolean isTableNameValid(String name) {
+  public static boolean isTableNameValid(String name) {
     return !name.contains("=");
   }
 }

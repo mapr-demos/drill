@@ -24,10 +24,8 @@ import org.apache.drill.common.JSONOptions;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.store.AbstractStoragePlugin;
 import org.apache.drill.exec.store.SchemaConfig;
-import org.apache.drill.exec.store.openTSDB.client.OpenTSDB;
+import org.apache.drill.exec.store.openTSDB.client.services.ServiceImpl;
 import org.apache.drill.exec.store.openTSDB.schema.OpenTSDBSchemaFactory;
-import retrofit2.Retrofit;
-import retrofit2.converter.jackson.JacksonConverterFactory;
 
 import java.io.IOException;
 
@@ -38,17 +36,13 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
   private final OpenTSDBStoragePluginConfig engineConfig;
   private final OpenTSDBSchemaFactory schemaFactory;
 
-  private final OpenTSDB client;
+  private final ServiceImpl db;
 
   public OpenTSDBStoragePlugin(OpenTSDBStoragePluginConfig configuration, DrillbitContext context, String name) throws IOException {
     this.context = context;
     this.schemaFactory = new OpenTSDBSchemaFactory(this, name);
     this.engineConfig = configuration;
-    this.client = new Retrofit.Builder()
-        .baseUrl("http://" + configuration.getConnection())
-        .addConverterFactory(JacksonConverterFactory.create())
-        .build()
-        .create(OpenTSDB.class);
+    this.db = new ServiceImpl("http://" + configuration.getConnection());
   }
 
   @Override
@@ -86,11 +80,11 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
     schemaFactory.registerSchemas(schemaConfig, parent);
   }
 
-  public OpenTSDB getClient() {
-    return client;
+  public ServiceImpl getClient() {
+    return db;
   }
 
-  public DrillbitContext getContext() {
+  DrillbitContext getContext() {
     return this.context;
   }
 }

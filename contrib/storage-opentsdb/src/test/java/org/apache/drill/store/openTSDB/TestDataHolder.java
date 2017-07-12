@@ -136,6 +136,19 @@ class TestDataHolder {
           "}]" +
           "}";
 
+  static final String REQUEST_TO_NONEXISTENT_METRIC =
+      "{" +
+          "\"start\":\"47y-ago\"," +
+          "\"queries\":[{" +
+          "\"aggregator\":\"sum\"," +
+          "\"metric\":\"warp.spee\"," +
+          "\"rate\":null," +
+          "\"downsample\":null," +
+          "\"tags\":{" + "}" +
+          "}]" +
+          "}";
+
+
   static final String POST_REQUEST_WITHOUT_TAGS =
       "{" +
           "\"start\":\"47y-ago\"," +

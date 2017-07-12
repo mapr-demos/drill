@@ -24,13 +24,16 @@ import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.openTSDB.OpenTSDBStoragePluginConfig;
 import org.apache.drill.exec.store.openTSDB.schema.OpenTSDBSchemaFactory.OpenTSDBTables;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import java.util.Map;
 import java.util.Set;
 
 public class OpenTSDBDatabaseSchema extends AbstractSchema {
 
-  private static final org.slf4j.Logger log = org.slf4j.LoggerFactory.getLogger(OpenTSDBDatabaseSchema.class);
+  private static final Logger log =
+      LoggerFactory.getLogger(OpenTSDBDatabaseSchema.class);
 
   private final OpenTSDBTables schema;
   private final Set<String> tableNames;
@@ -46,7 +49,7 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
 
   @Override
   public Table getTable(String tableName) {
-    if (isTableExist(tableName)) {
+    if (!isTableExist(tableName)) {
       return null;
     }
 
@@ -68,7 +71,7 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
   }
 
   private boolean isTableExist(String tableName) {
-    return !tableNames.contains(tableName);
+    return tableNames.contains(tableName);
   }
 
 }
