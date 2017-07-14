@@ -17,7 +17,10 @@
  */
 package org.apache.drill.exec.store.openTSDB.client.query;
 
+import java.util.HashMap;
 import java.util.Map;
+
+import static org.apache.drill.exec.store.openTSDB.Constants.SUM_AGGREGATOR;
 
 /**
  * Query is an abstraction of openTSDB subQuery
@@ -52,44 +55,82 @@ public class Query {
    */
   private Map<String, String> tags;
 
-  public String getAggregator() {
-    return aggregator;
+  private Query(Builder builder) {
+    this.aggregator = builder.aggregator;
+    this.metric = builder.metric;
+    this.rate = builder.rate;
+    this.downsample = builder.downsample;
+    this.tags = builder.tags;
   }
 
-  public void setAggregator(String aggregator) {
-    this.aggregator = aggregator;
+  public String getAggregator() {
+    return aggregator;
   }
 
   public String getMetric() {
     return metric;
   }
 
-  public void setMetric(String metric) {
-    this.metric = metric;
-  }
-
   public String getRate() {
     return rate;
-  }
-
-  public void setRate(String rate) {
-    this.rate = rate;
   }
 
   public String getDownsample() {
     return downsample;
   }
 
-  public void setDownsample(String downsample) {
-    this.downsample = downsample;
-  }
-
   public Map<String, String> getTags() {
     return tags;
   }
 
-  public void setTags(Map<String, String> tags) {
-    this.tags = tags;
+  public static class Builder {
+
+    private String aggregator = SUM_AGGREGATOR;
+    private String metric;
+    private String rate;
+    private String downsample;
+    private Map<String, String> tags = new HashMap<>();
+
+    public Builder(String metric) {
+      this.metric = metric;
+    }
+
+    public Builder setAggregator(String aggregator) {
+      if (aggregator != null) {
+        this.aggregator = aggregator;
+      }
+      return this;
+    }
+
+    public Builder setMetric(String metric) {
+      this.metric = metric;
+      return this;
+    }
+
+    public Builder setRate(String rate) {
+      if (rate != null) {
+        this.rate = rate;
+      }
+      return this;
+    }
+
+    public Builder setDownsample(String downsample) {
+      if (downsample != null) {
+        this.downsample = downsample;
+      }
+      return this;
+    }
+
+    public Builder setTags(Map<String, String> tags) {
+      if (tags != null) {
+        this.tags = tags;
+      }
+      return this;
+    }
+
+    public Query build() {
+      return new Query(this);
+    }
   }
 
   @Override

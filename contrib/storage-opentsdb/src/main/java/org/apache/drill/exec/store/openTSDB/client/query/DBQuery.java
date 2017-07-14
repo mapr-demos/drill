@@ -17,7 +17,10 @@
  */
 package org.apache.drill.exec.store.openTSDB.client.query;
 
+import java.util.HashSet;
 import java.util.Set;
+
+import static org.apache.drill.exec.store.openTSDB.Constants.DEFAULT_TIME;
 
 /**
  * DBQuery is an abstraction of an openTSDB query,
@@ -37,20 +40,41 @@ public class DBQuery {
    */
   private Set<Query> queries;
 
-  public String getStart() {
-    return start;
+  private DBQuery(Builder builder) {
+    this.start = builder.start;
+    this.queries = builder.queries;
   }
 
-  public void setStart(String start) {
-    this.start = start;
+  public String getStart() {
+    return start;
   }
 
   public Set<Query> getQueries() {
     return queries;
   }
 
-  public void setQueries(Set<Query> queries) {
-    this.queries = queries;
+  public static class Builder {
+
+    private String start = DEFAULT_TIME;
+    private Set<Query> queries = new HashSet<>();
+
+    public Builder() {
+    }
+
+    public Builder setStartTime(String startTime) {
+      this.start = startTime;
+      return this;
+    }
+
+    public Builder setQueries(Set<Query> queries) {
+      this.queries = queries;
+      return this;
+    }
+
+    public DBQuery build() {
+      return new DBQuery(this);
+    }
+
   }
 
   @Override

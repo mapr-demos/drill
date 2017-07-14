@@ -39,11 +39,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static org.apache.drill.exec.store.openTSDB.Constants.AGGREGATOR;
-import static org.apache.drill.exec.store.openTSDB.Constants.DEFAULT_TIME;
 import static org.apache.drill.exec.store.openTSDB.Constants.DOWNSAMPLE;
 import static org.apache.drill.exec.store.openTSDB.Constants.METRIC;
-import static org.apache.drill.exec.store.openTSDB.Constants.SUM_AGGREGATOR;
-import static org.apache.drill.exec.store.openTSDB.Constants.TIME;
 import static org.apache.drill.exec.store.openTSDB.Util.isTableNameValid;
 import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
 
@@ -124,10 +121,18 @@ public class ServiceImpl implements Service {
 
   private Set<MetricDTO> getAllMetricsFromDBByTags() throws IOException {
     Map<String, String> tags = new HashMap<>();
-    DBQuery baseQuery = new DBQuery();
-    Query subQuery = new Query();
 
-    setupBaseQuery(baseQuery, subQuery, tags);
+    Query subQuery = new Query.Builder(queryParameters.get(METRIC))
+        .setAggregator(queryParameters.get(AGGREGATOR))
+        .setDownsample(queryParameters.get(DOWNSAMPLE))
+        .setTags(tags).build();
+
+    Set<Query> queries = new HashSet<>();
+    queries.add(subQuery);
+
+    DBQuery baseQuery = new DBQuery.Builder()
+        .setQueries(queries)
+        .build();
 
     Set<MetricDTO> tables =
         getBaseTables(baseQuery);
@@ -157,53 +162,6 @@ public class ServiceImpl implements Service {
     }
 
     return extractedTags;
-  }
-
-  private String getProperty(String propertyName, String defaultValue) {
-    return queryParameters.containsKey(propertyName) ?
-        queryParameters.get(propertyName) : defaultValue;
-  }
-
-  private void setupBaseQuery(DBQuery base, Query query, Map<String, String> tags) {
-    setStartTimeInDBBaseQuery(base);
-    setupSubQuery(tags, query);
-    addSubQueryToBaseQuery(base, query);
-  }
-
-  private void setupSubQuery(Map<String, String> tags, Query subQuery) {
-    setAggregatorInQuery(subQuery);
-    setMetricNameInQuery(subQuery);
-    setDownsampleInQuery(subQuery);
-    setEmptyTagMapInQuery(subQuery, tags);
-  }
-
-  private void setAggregatorInQuery(Query subQuery) {
-    subQuery.setAggregator(getProperty(AGGREGATOR, SUM_AGGREGATOR));
-  }
-
-  private void setMetricNameInQuery(Query subQuery) {
-    subQuery.setMetric(queryParameters.get(METRIC));
-  }
-
-  private void setDownsampleInQuery(Query subQuery) {
-    if (queryParameters.containsKey(DOWNSAMPLE)) {
-      subQuery.setDownsample(queryParameters.get(DOWNSAMPLE));
-    }
-  }
-
-  private void setEmptyTagMapInQuery(Query subQuery, Map<String, String> tags) {
-    subQuery.setTags(tags);
-  }
-
-  private void addSubQueryToBaseQuery(DBQuery base, Query subQuery) {
-    Set<Query> queries = new HashSet<>();
-    queries.add(subQuery);
-
-    base.setQueries(queries);
-  }
-
-  private void setStartTimeInDBBaseQuery(DBQuery base) {
-    base.setStart(getProperty(TIME, DEFAULT_TIME));
   }
 
   private void transformTagsForRequest(Map<String, String> tags, String value) {
