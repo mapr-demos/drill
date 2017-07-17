@@ -24,7 +24,6 @@ public class Constants {
   public static final String DEFAULT_TIME = "47y-ago";
   public static final String SUM_AGGREGATOR = "sum";
 
-  public static final String TIME = "time";
   public static final String METRIC = "metric";
   public static final String AGGREGATOR = "aggregator";
   public static final String DOWNSAMPLE = "downsample";

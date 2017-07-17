@@ -61,22 +61,22 @@ public class ServiceImpl implements Service {
   }
 
   @Override
-  public Set<MetricDTO> getTablesFromDB() {
+  public Set<MetricDTO> getAllMetrics() {
     return getAllMetricsByTags();
   }
 
   @Override
-  public Set<String> getAllTableNames() {
+  public Set<String> getAllMetricNames() {
     return getTableNames();
   }
 
   @Override
-  public List<ColumnDTO> getUnfixedColumnsToSchema() {
-    Set<MetricDTO> tables = getAllMetricsByTags();
+  public List<ColumnDTO> getUnfixedColumns() {
+    Set<MetricDTO> metrics = getAllMetricsByTags();
     List<ColumnDTO> unfixedColumns = new ArrayList<>();
 
-    for (MetricDTO table : tables) {
-      for (String tag : table.getTags().keySet()) {
+    for (MetricDTO metric : metrics) {
+      for (String tag : metric.getTags().keySet()) {
         ColumnDTO tmp = new ColumnDTO(tag, OpenTSDBTypes.STRING);
         if (!unfixedColumns.contains(tmp)) {
           unfixedColumns.add(tmp);
@@ -115,13 +115,29 @@ public class ServiceImpl implements Service {
     }
   }
 
-  private Set<MetricDTO> getAllTablesWithSpecialTag(DBQuery base) throws IOException {
+  private Set<MetricDTO> getMetricsByTags(DBQuery base) throws IOException {
     return client.getTables(base).execute().body();
   }
 
   private Set<MetricDTO> getAllMetricsFromDBByTags() throws IOException {
     Map<String, String> tags = new HashMap<>();
+    DBQuery baseQuery = getConfiguredDbQuery(tags);
 
+    Set<MetricDTO> metrics = getBaseMetric(baseQuery);
+    Set<String> extractedTags = getTagsFromMetrics(metrics);
+
+    return getMetricsByTags(extractedTags);
+  }
+
+  private Set<MetricDTO> getMetricsByTags(Set<String> extractedTags) throws IOException {
+    Set<MetricDTO> metrics = new HashSet<>();
+    for (String value : extractedTags) {
+      metrics.addAll(getMetricsByTags(getConfiguredDbQuery(getTransformedTag(value))));
+    }
+    return metrics;
+  }
+
+  private DBQuery getConfiguredDbQuery(Map<String, String> tags) {
     Query subQuery = new Query.Builder(queryParameters.get(METRIC))
         .setAggregator(queryParameters.get(AGGREGATOR))
         .setDownsample(queryParameters.get(DOWNSAMPLE))
@@ -130,33 +146,19 @@ public class ServiceImpl implements Service {
     Set<Query> queries = new HashSet<>();
     queries.add(subQuery);
 
-    DBQuery baseQuery = new DBQuery.Builder()
+    return new DBQuery.Builder()
         .setQueries(queries)
         .build();
-
-    Set<MetricDTO> tables =
-        getBaseTables(baseQuery);
-
-    Set<String> extractedTags =
-        getTagsFromTables(tables);
-
-    tables.clear();
-
-    for (String value : extractedTags) {
-      transformTagsForRequest(tags, value);
-      tables.addAll(getAllTablesWithSpecialTag(baseQuery));
-    }
-    return tables;
   }
 
-  private Set<MetricDTO> getBaseTables(DBQuery base) throws IOException {
-    return getAllTablesWithSpecialTag(base);
+  private Set<MetricDTO> getBaseMetric(DBQuery base) throws IOException {
+    return getMetricsByTags(base);
   }
 
-  private Set<String> getTagsFromTables(Set<MetricDTO> tables) {
+  private Set<String> getTagsFromMetrics(Set<MetricDTO> metrics) {
     Set<String> extractedTags = new HashSet<>();
 
-    for (MetricDTO table : tables) {
+    for (MetricDTO table : metrics) {
       extractedTags.addAll(table.getAggregateTags());
       extractedTags.addAll(table.getTags().keySet());
     }
@@ -164,9 +166,10 @@ public class ServiceImpl implements Service {
     return extractedTags;
   }
 
-  private void transformTagsForRequest(Map<String, String> tags, String value) {
-    tags.clear();
-    tags.put(value, "*");
+  private Map<String, String> getTransformedTag(String tag) {
+    Map<String, String> tags = new HashMap<>();
+    tags.put(tag, "*");
+    return tags;
   }
 
   private void logIOException(IOException e) {

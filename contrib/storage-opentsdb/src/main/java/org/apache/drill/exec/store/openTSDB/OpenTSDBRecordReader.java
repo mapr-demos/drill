@@ -79,11 +79,11 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   @Override
   public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
     this.output = output;
-    Set<MetricDTO> tables = db.getTablesFromDB();
-    if (tables == null || tables.isEmpty()) {
+    Set<MetricDTO> metrics = db.getAllMetrics();
+    if (metrics == null || metrics.isEmpty()) {
       throw new ValidationError(String.format("Table '%s' not found or it's empty", subScanSpec.getTableName()));
     }
-    this.tableIterator = tables.iterator();
+    this.tableIterator = metrics.iterator();
   }
 
   @Override

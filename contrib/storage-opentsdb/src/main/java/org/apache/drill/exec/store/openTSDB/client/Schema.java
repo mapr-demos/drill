@@ -52,7 +52,7 @@ public class Schema {
     columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
     columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
     columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
-    columns.addAll(db.getUnfixedColumnsToSchema());
+    columns.addAll(db.getUnfixedColumns());
   }
 
   /**

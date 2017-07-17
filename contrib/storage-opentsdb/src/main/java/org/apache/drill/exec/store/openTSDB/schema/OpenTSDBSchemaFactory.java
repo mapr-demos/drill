@@ -71,7 +71,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     public AbstractSchema getSubSchema(String name) {
       Set<String> tables;
       if (!schemaMap.containsKey(name)) {
-        tables = plugin.getClient().getAllTableNames();
+        tables = plugin.getClient().getAllMetricNames();
         schemaMap.put(name, new OpenTSDBDatabaseSchema(tables, this, name));
       }
       return schemaMap.get(name);
@@ -96,7 +96,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
 
     @Override
     public Set<String> getTableNames() {
-      return plugin.getClient().getAllTableNames();
+      return plugin.getClient().getAllMetricNames();
     }
 
     @Override

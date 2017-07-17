@@ -24,9 +24,35 @@ import java.util.List;
 import java.util.Set;
 
 public interface Service {
+  /**
+   *
+   * Used for getting all Metrics from openTSDB
+   *
+   * @return Set<MetricDTO> all metrics
+   */
+  Set<MetricDTO> getAllMetrics();
 
-  Set<MetricDTO> getTablesFromDB();
-  Set<String> getAllTableNames();
-  List<ColumnDTO> getUnfixedColumnsToSchema();
+  /**
+   *
+   * Used for getting all metrics names from openTSDB
+   *
+   * @return Set<String> metric names
+   */
+  Set<String> getAllMetricNames();
+
+  /**
+   *
+   * Used for getting all non fixed columns based on tags from openTSDB
+   *
+   * @return List<ColumnDTO> columns based on tags
+   */
+  List<ColumnDTO> getUnfixedColumns();
+
+  /**
+   *
+   * Used for setup all parameters for API request to openTSDB
+   *
+   * @param rowData with this syntax (metric=warp.speed.test)
+   */
   void setupQueryParameters(String rowData);
 }

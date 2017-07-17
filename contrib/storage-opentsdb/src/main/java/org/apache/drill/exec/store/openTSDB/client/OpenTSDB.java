@@ -23,7 +23,6 @@ import retrofit2.Call;
 import retrofit2.http.Body;
 import retrofit2.http.GET;
 import retrofit2.http.POST;
-import retrofit2.http.Query;
 
 import java.util.Set;
 
@@ -39,16 +38,6 @@ public interface OpenTSDB {
    */
   @GET("api/suggest?type=metrics&max=999")
   Call<Set<String>> getAllTablesName();
-
-  /**
-   * Used for retrieving all tables that corresponds to params
-   *
-   * @param time                    The start time for the query. This can be a relative or absolute timestamp.
-   * @param aggregatorWithTableName Aggregator with Metric name with such syntax <aggregator>:<table_name>
-   * @return Set<Table> with metrics from openTSDB
-   */
-  @GET("api/query")
-  Call<Set<MetricDTO>> getTables(@Query("start") String time, @Query("m") String aggregatorWithTableName);
 
   /**
    * Overloaded getTables for POST request to DB
