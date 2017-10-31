@@ -20,6 +20,9 @@ package org.apache.drill.store.openTSDB;
 import com.github.tomakehurst.wiremock.junit.WireMockRule;
 import org.apache.drill.BaseTestQuery;
 import org.apache.drill.common.exceptions.UserRemoteException;
+import org.apache.drill.exec.store.StoragePluginRegistry;
+import org.apache.drill.exec.store.openTSDB.OpenTSDBStoragePlugin;
+import org.apache.drill.exec.store.openTSDB.OpenTSDBStoragePluginConfig;
 import org.junit.BeforeClass;
 import org.junit.Rule;
 import org.junit.Test;
@@ -42,14 +45,21 @@ import static org.apache.drill.store.openTSDB.TestDataHolder.SAMPLE_DATA_FOR_POS
 import static org.apache.drill.store.openTSDB.TestDataHolder.SAMPLE_DATA_FOR_POST_REQUEST_WITH_TAGS;
 
 public class TestOpenTSDBPlugin extends BaseTestQuery {
+  protected static OpenTSDBStoragePlugin storagePlugin;
+  protected static OpenTSDBStoragePluginConfig storagePluginConfig;
 
   @Rule
-  public WireMockRule wireMockRule = new WireMockRule(8089);
+  public WireMockRule wireMockRule = new WireMockRule(10000);
 
   private static TestBase base;
 
   @BeforeClass
   public static void addTestDataToDB() throws Exception {
+    final StoragePluginRegistry pluginRegistry = getDrillbitContext().getStorage();
+    storagePlugin = (OpenTSDBStoragePlugin) pluginRegistry.getPlugin(OpenTSDBStoragePluginConfig.NAME);
+    storagePluginConfig = storagePlugin.getConfig();
+    storagePluginConfig.setEnabled(true);
+    pluginRegistry.createOrUpdate(OpenTSDBStoragePluginConfig.NAME, storagePluginConfig, true);
     base = new TestBase();
   }
 

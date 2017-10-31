@@ -2,8 +2,8 @@
   "storage": {
     openTSDB: {
       type: "openTSDB",
-      connection: "1.2.3.4:4242",
-      enabled: true
+      connection: "localhost:10000",
+      enabled: false
     }
   }
 }
