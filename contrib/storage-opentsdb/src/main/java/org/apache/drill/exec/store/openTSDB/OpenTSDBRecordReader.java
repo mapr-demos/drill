@@ -96,11 +96,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   }
 
   @Override
-  protected boolean isSkipQuery() {
-    return super.isSkipQuery();
-  }
-
-  @Override
   public void close() throws Exception {
   }
 

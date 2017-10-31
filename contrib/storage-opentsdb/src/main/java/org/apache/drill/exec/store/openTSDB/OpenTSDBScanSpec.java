@@ -32,4 +32,11 @@ public class OpenTSDBScanSpec {
   public String getTableName() {
     return tableName;
   }
+
+  @Override
+  public String toString() {
+    return "OpenTSDBScanSpec{" +
+            "tableName='" + tableName + '\'' +
+            '}';
+  }
 }

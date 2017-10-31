@@ -79,11 +79,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     }
 
     @Override
-    public Set<String> getSubSchemaNames() {
-      return Collections.emptySet();
-    }
-
-    @Override
     public Table getTable(String name) {
       OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
       name = getValidTableName(name);
@@ -102,15 +97,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public CreateTableEntry createNewTable(final String tableName, List<String> partitionColumns) {
       return null;
-    }
-
-    @Override
-    public void dropTable(String tableName) {
-    }
-
-    @Override
-    public boolean isMutable() {
-      return true;
     }
 
     @Override

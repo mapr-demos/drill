@@ -46,14 +46,6 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
   }
 
   @Override
-  public void start() throws IOException {
-  }
-
-  @Override
-  public void close() throws Exception {
-  }
-
-  @Override
   public boolean supportsRead() {
     return true;
   }
@@ -68,11 +60,6 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
     OpenTSDBScanSpec scanSpec = selection.getListWith(new ObjectMapper(), new TypeReference<OpenTSDBScanSpec>() {
     });
     return new OpenTSDBGroupScan(this, scanSpec, null);
-  }
-
-  @Override
-  public boolean supportsWrite() {
-    return true;
   }
 
   @Override
