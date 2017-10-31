@@ -19,8 +19,8 @@ package org.apache.drill.exec.store.openTSDB;
 
 import com.google.common.collect.ImmutableList;
 import com.google.common.collect.ImmutableMap;
+import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
-import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.common.logical.ValidationError;
 import org.apache.drill.common.types.TypeProtos;
@@ -80,8 +80,8 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
     this.output = output;
     Set<MetricDTO> metrics = db.getAllMetrics();
-    if (metrics == null || metrics.isEmpty()) {
-      throw new ValidationError(String.format("Table '%s' not found or it's empty", subScanSpec.getTableName()));
+    if (metrics == null) {
+      throw new ValidationError(String.format("Table '%s' not found", subScanSpec.getTableName()));
     }
     this.tableIterator = metrics.iterator();
   }
@@ -91,8 +91,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
     try {
       return processOpenTSDBTablesData();
     } catch (SchemaChangeException e) {
-      log.info(e.toString());
-      return 0;
+      throw new DrillRuntimeException(e);
     }
   }
 
@@ -202,8 +201,10 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
       TypeProtos.MinorType minorType = TYPES.get(type);
 
       if (isMinorTypeNull(minorType)) {
-        logExceptionMessage(name, type);
-        continue;
+        String message = String.format(
+                "A column you queried has a data type that is not currently supported by the OpenTSDB storage plugin. "
+                        + "The column's name was %s and its OpenTSDB data type was %s. ", name, type.toString());
+        throw new DrillRuntimeException(message);
       }
 
       ProjectedColumnInfo pci = getProjectedColumnInfo(column, name, minorType);
@@ -226,18 +227,6 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
         getValueVector(minorType, majorType, field);
 
     return getProjectedColumnInfo(column, vector);
-  }
-
-  private void logExceptionMessage(String name, OpenTSDBTypes type) {
-    log.warn("Ignoring column that is unsupported.", UserException
-        .unsupportedError()
-        .message(
-            "A column you queried has a data type that is not currently supported by the OpenTSDB storage plugin. "
-                + "The column's name was %s and its OpenTSDB data type was %s. ",
-            name, type.toString())
-        .addContext("column Name", name)
-        .addContext("plugin", "openTSDB")
-        .build(log));
   }
 
   private MajorType getMajorType(MinorType minorType) {

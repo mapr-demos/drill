@@ -28,6 +28,10 @@ import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 
 import java.util.List;
 
+import static org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes.DOUBLE;
+import static org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes.STRING;
+import static org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes.TIMESTAMP;
+
 public class DrillOpenTSDBTable extends DynamicDrillTable {
 
   private final Schema schema;
@@ -63,7 +67,8 @@ public class DrillOpenTSDBTable extends DynamicDrillTable {
       case TIMESTAMP:
         return typeFactory.createSqlType(SqlTypeName.TIMESTAMP);
       default:
-        throw new UnsupportedOperationException("Unsupported type.");
+        throw new UnsupportedOperationException(
+                String.format("%s is unsupported now. Currently supported types is %s, %s, %s", type, STRING, DOUBLE, TIMESTAMP));
     }
   }
 }

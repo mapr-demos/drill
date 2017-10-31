@@ -20,6 +20,7 @@ package org.apache.drill.exec.store.openTSDB.schema;
 import com.google.common.collect.Maps;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
+import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.exec.planner.logical.CreateTableEntry;
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.DynamicDrillTable;
@@ -89,8 +90,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
       try {
         return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
       } catch (Exception e) {
-        log.warn("Failure while retrieving openTSDB table {}", name, e);
-        return null;
+        throw new DrillRuntimeException(String.format("Failure while retrieving openTSDB table %s", name), e);
       }
     }
 

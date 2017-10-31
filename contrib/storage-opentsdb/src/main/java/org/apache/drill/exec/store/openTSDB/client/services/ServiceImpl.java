@@ -17,6 +17,7 @@
  */
 package org.apache.drill.exec.store.openTSDB.client.services;
 
+import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDB;
 import org.apache.drill.exec.store.openTSDB.client.OpenTSDBTypes;
 import org.apache.drill.exec.store.openTSDB.client.Service;
@@ -31,7 +32,7 @@ import retrofit2.converter.jackson.JacksonConverterFactory;
 
 import java.io.IOException;
 import java.util.ArrayList;
-import java.util.Collections;
+
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
@@ -101,8 +102,8 @@ public class ServiceImpl implements Service {
     try {
       return getAllMetricsFromDBByTags();
     } catch (IOException e) {
-      logIOException(e);
-      return Collections.emptySet();
+      throw new DrillRuntimeException("Cannot connect to the db. " +
+              "Maybe you have incorrect connection params or db unavailable now", e);
     }
   }
 
@@ -110,8 +111,8 @@ public class ServiceImpl implements Service {
     try {
       return client.getAllTablesName().execute().body();
     } catch (IOException e) {
-      e.printStackTrace();
-      return Collections.emptySet();
+      throw new DrillRuntimeException("Cannot connect to the db. " +
+              "Maybe you have incorrect connection params or db unavailable now", e);
     }
   }
 
@@ -171,9 +172,4 @@ public class ServiceImpl implements Service {
     tags.put(tag, "*");
     return tags;
   }
-
-  private void logIOException(IOException e) {
-    log.warn("A problem occurred when talking to the server", e);
-  }
-
 }
