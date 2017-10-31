@@ -62,8 +62,6 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
   private List<OpenTSDBWork> openTSDBWorkList = Lists.newArrayList();
   private List<EndpointAffinity> affinities;
 
-  private boolean filterPushedDown = false;
-
   @JsonCreator
   public OpenTSDBGroupScan(@JsonProperty("openTSDBScanSpec") OpenTSDBScanSpec openTSDBScanSpec,
                            @JsonProperty("storage") OpenTSDBStoragePluginConfig openTSDBStoragePluginConfig,
@@ -93,7 +91,6 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
     this.openTSDBScanSpec = that.openTSDBScanSpec;
     this.storagePlugin = that.storagePlugin;
     this.storagePluginConfig = that.storagePluginConfig;
-    this.filterPushedDown = that.filterPushedDown;
     this.openTSDBWorkList = that.openTSDBWorkList;
     this.assignments = that.assignments;
     init();

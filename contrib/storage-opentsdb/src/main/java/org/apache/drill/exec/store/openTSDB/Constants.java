@@ -17,7 +17,7 @@
  */
 package org.apache.drill.exec.store.openTSDB;
 
-public class Constants {
+public interface Constants {
   /**
    * openTSDB required constants for API call
    */

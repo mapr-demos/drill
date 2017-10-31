@@ -48,7 +48,7 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
   private static final Logger log = LoggerFactory.getLogger(OpenTSDBSchemaFactory.class);
 
   private final String schemaName;
-  private OpenTSDBStoragePlugin plugin;
+  private final OpenTSDBStoragePlugin plugin;
 
   public OpenTSDBSchemaFactory(OpenTSDBStoragePlugin plugin, String schemaName) {
     this.plugin = plugin;
@@ -57,14 +57,14 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
 
   @Override
   public void registerSchemas(SchemaConfig schemaConfig, SchemaPlus parent) throws IOException {
-    OpenTSDBTables schema = new OpenTSDBTables(schemaName);
+    OpenTSDBSchema schema = new OpenTSDBSchema(schemaName);
     parent.add(schemaName, schema);
   }
 
-  class OpenTSDBTables extends AbstractSchema {
+  class OpenTSDBSchema extends AbstractSchema {
     private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
 
-    OpenTSDBTables(String name) {
+    OpenTSDBSchema(String name) {
       super(Collections.<String>emptyList(), name);
     }
 

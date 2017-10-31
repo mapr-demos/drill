@@ -67,7 +67,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   private ImmutableList<ProjectedColumnInfo> projectedCols;
   private OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec;
 
-  OpenTSDBRecordReader(Service client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
+  public OpenTSDBRecordReader(Service client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
                        List<SchemaPath> projectedColumns) throws IOException {
     setColumns(projectedColumns);
     this.db = client;

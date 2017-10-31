@@ -23,7 +23,7 @@ import org.apache.calcite.schema.Table;
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.openTSDB.OpenTSDBStoragePluginConfig;
-import org.apache.drill.exec.store.openTSDB.schema.OpenTSDBSchemaFactory.OpenTSDBTables;
+import org.apache.drill.exec.store.openTSDB.schema.OpenTSDBSchemaFactory.OpenTSDBSchema;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -35,12 +35,12 @@ public class OpenTSDBDatabaseSchema extends AbstractSchema {
   private static final Logger log =
       LoggerFactory.getLogger(OpenTSDBDatabaseSchema.class);
 
-  private final OpenTSDBTables schema;
+  private final OpenTSDBSchema schema;
   private final Set<String> tableNames;
 
   private final Map<String, DrillTable> drillTables = Maps.newHashMap();
 
-  public OpenTSDBDatabaseSchema(Set<String> tableList, OpenTSDBTables schema,
+  public OpenTSDBDatabaseSchema(Set<String> tableList, OpenTSDBSchema schema,
                                 String name) {
     super(schema.getSchemaPath(), name);
     this.schema = schema;

@@ -24,5 +24,5 @@ package org.apache.drill.exec.store.openTSDB.client;
 public enum OpenTSDBTypes {
   STRING,
   DOUBLE,
-  TIMESTAMP,
+  TIMESTAMP
 }

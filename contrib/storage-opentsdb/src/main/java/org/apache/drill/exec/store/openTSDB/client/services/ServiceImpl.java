@@ -43,14 +43,14 @@ import static org.apache.drill.exec.store.openTSDB.Constants.AGGREGATOR;
 import static org.apache.drill.exec.store.openTSDB.Constants.DOWNSAMPLE;
 import static org.apache.drill.exec.store.openTSDB.Constants.METRIC;
 import static org.apache.drill.exec.store.openTSDB.Util.isTableNameValid;
-import static org.apache.drill.exec.store.openTSDB.Util.parseFROMRowData;
+import static org.apache.drill.exec.store.openTSDB.Util.parseFromRowData;
 
 public class ServiceImpl implements Service {
 
   private static final Logger log =
       LoggerFactory.getLogger(ServiceImpl.class);
 
-  private OpenTSDB client;
+  private final OpenTSDB client;
   private Map<String, String> queryParameters;
 
   public ServiceImpl(String connectionURL) {
@@ -90,7 +90,7 @@ public class ServiceImpl implements Service {
   @Override
   public void setupQueryParameters(String rowData) {
     if (!isTableNameValid(rowData)) {
-      this.queryParameters = parseFROMRowData(rowData);
+      this.queryParameters = parseFromRowData(rowData);
     } else {
       Map<String, String> params = new HashMap<>();
       params.put(METRIC, rowData);

@@ -24,7 +24,7 @@ import org.junit.Assert;
 
 import java.util.List;
 
-class TestBase extends PlanTestBase {
+public class TestBase extends PlanTestBase {
 
   void runSQLVerifyCount(String sql, int expectedRowCount)
       throws Exception {

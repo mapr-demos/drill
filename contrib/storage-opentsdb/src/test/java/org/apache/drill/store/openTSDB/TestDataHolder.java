@@ -17,9 +17,9 @@
  */
 package org.apache.drill.store.openTSDB;
 
-class TestDataHolder {
+public class TestDataHolder {
 
-  static final String SAMPLE_DATA_FOR_POST_REQUEST_WITH_TAGS = "[{" +
+  public static final String SAMPLE_DATA_FOR_POST_REQUEST_WITH_TAGS = "[{" +
       "\"metric\":\"warp.speed.test\"," +
       "\"tags\":{\"symbol\":\"VOD.L\"}," +
       "\"aggregateTags\":[]," +
@@ -52,7 +52,7 @@ class TestDataHolder {
       "\"1407165422\":224.14999389648438}" +
       "}]";
 
-  static final String SAMPLE_DATA_FOR_GET_TABLE_REQUEST =
+  public static final String SAMPLE_DATA_FOR_GET_TABLE_REQUEST =
       "[{" +
           "\"metric\":\"warp.speed.test\"," +
           "\"tags\":{}," +
@@ -75,7 +75,7 @@ class TestDataHolder {
           "\"1488271956\":111.11000061035156}" +
           "}]";
 
-  static final String SAMPLE_DATA_FOR_POST_DOWNSAMPLE_REQUEST_WITH_TAGS =
+  public static final String SAMPLE_DATA_FOR_POST_DOWNSAMPLE_REQUEST_WITH_TAGS =
       "[{" +
           "\"metric\":\"warp.speed.test\"," +
           "\"tags\":{\"symbol\":\"VOD.L\"}," +
@@ -98,9 +98,9 @@ class TestDataHolder {
           "\"1261440000\":224.14999389648438}" +
           "}]";
 
-  static final String SAMPLE_DATA_FOR_GET_TABLE_NAME_REQUEST = "[\"warp.speed.test\"]";
+  public static final String SAMPLE_DATA_FOR_GET_TABLE_NAME_REQUEST = "[\"warp.speed.test\"]";
 
-  static final String SAMPLE_DATA_FOR_POST_DOWNSAMPLE_REQUEST_WITHOUT_TAGS =
+  public static final String SAMPLE_DATA_FOR_POST_DOWNSAMPLE_REQUEST_WITHOUT_TAGS =
       "[{" +
           "\"metric\":\"warp.speed.test\"," +
           "\"tags\":{}," +
@@ -111,7 +111,7 @@ class TestDataHolder {
           "\"1419120000\":111.11000061035156}" +
           "}]";
 
-  static final String DOWNSAMPLE_REQUEST_WTIHOUT_TAGS =
+  public static final String DOWNSAMPLE_REQUEST_WTIHOUT_TAGS =
       "{" +
           "\"start\":\"47y-ago\"," +
           "\"queries\":[{" +
@@ -123,7 +123,7 @@ class TestDataHolder {
           "}]" +
           "}";
 
-  static final String DOWNSAMPLE_REQUEST_WITH_TAGS =
+  public static final String DOWNSAMPLE_REQUEST_WITH_TAGS =
       "{" +
           "\"start\":\"47y-ago\"," +
           "\"queries\":[{" +
@@ -136,7 +136,7 @@ class TestDataHolder {
           "}]" +
           "}";
 
-  static final String REQUEST_TO_NONEXISTENT_METRIC =
+  public static final String REQUEST_TO_NONEXISTENT_METRIC =
       "{" +
           "\"start\":\"47y-ago\"," +
           "\"queries\":[{" +
@@ -149,7 +149,7 @@ class TestDataHolder {
           "}";
 
 
-  static final String POST_REQUEST_WITHOUT_TAGS =
+  public static final String POST_REQUEST_WITHOUT_TAGS =
       "{" +
           "\"start\":\"47y-ago\"," +
           "\"queries\":[{" +
@@ -162,7 +162,7 @@ class TestDataHolder {
           "}";
 
 
-  static final String POST_REQUEST_WITH_TAGS =
+  public static final String POST_REQUEST_WITH_TAGS =
       "{" +
           "\"start\":\"47y-ago\"," +
           "\"queries\":[{" +
