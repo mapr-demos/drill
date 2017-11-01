@@ -42,7 +42,7 @@ public class OpenTSDBStoragePlugin extends AbstractStoragePlugin {
     this.context = context;
     this.schemaFactory = new OpenTSDBSchemaFactory(this, name);
     this.engineConfig = configuration;
-    this.db = new ServiceImpl("http://" + configuration.getConnection());
+    this.db = new ServiceImpl(configuration.getConnection());
   }
 
   @Override
