@@ -165,6 +165,16 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
     return openTSDBScanSpec;
   }
 
+  @JsonProperty("storage")
+  public OpenTSDBStoragePluginConfig getStoragePluginConfig() {
+    return storagePluginConfig;
+  }
+
+  @JsonProperty
+  public List<SchemaPath> getColumns() {
+    return columns;
+  }
+
   @Override
   public GroupScan clone(List<SchemaPath> columns) {
     OpenTSDBGroupScan newScan = new OpenTSDBGroupScan(this);
@@ -174,8 +184,8 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
   @Override
   public String toString() {
-    return "OpenTSDBGroupScan [OpenTSDBScanSpec="
-        + openTSDBScanSpec + "]";
+    return "MongoGroupScan [MongoScanSpec=" + openTSDBScanSpec + ", columns=" + columns
+            + "]";
   }
 
   private static class OpenTSDBWork implements CompleteWork {

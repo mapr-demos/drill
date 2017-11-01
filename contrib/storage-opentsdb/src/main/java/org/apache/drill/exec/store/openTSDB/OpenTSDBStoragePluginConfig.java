@@ -34,6 +34,7 @@ public class OpenTSDBStoragePluginConfig extends StoragePluginConfigBase {
 
   @JsonCreator
   public OpenTSDBStoragePluginConfig(@JsonProperty("connection") String connection) throws IOException {
+    Objects.requireNonNull(connection, "Connection property must not be null. Check plugin configuration.");
     this.connection = connection;
   }
 

@@ -25,7 +25,6 @@ import com.fasterxml.jackson.annotation.JsonTypeName;
 import com.google.common.base.Preconditions;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
 import org.apache.drill.common.expression.SchemaPath;
-import org.apache.drill.common.logical.StoragePluginConfig;
 import org.apache.drill.exec.physical.base.AbstractBase;
 import org.apache.drill.exec.physical.base.PhysicalOperator;
 import org.apache.drill.exec.physical.base.PhysicalVisitor;
@@ -45,7 +44,6 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
   private static final Logger log =
       LoggerFactory.getLogger(OpenTSDBSubScan.class);
 
-  @JsonProperty
   public final OpenTSDBStoragePluginConfig storage;
 
   private final List<SchemaPath> columns;
@@ -54,13 +52,13 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
 
   @JsonCreator
   public OpenTSDBSubScan(@JacksonInject StoragePluginRegistry registry,
-                         @JsonProperty("storage") StoragePluginConfig storage,
+                         @JsonProperty("storage") OpenTSDBStoragePluginConfig storage,
                          @JsonProperty("tabletScanSpecList") LinkedList<OpenTSDBSubScanSpec> tabletScanSpecList,
                          @JsonProperty("columns") List<SchemaPath> columns) throws ExecutionSetupException {
     super((String) null);
     openTSDBStoragePlugin = (OpenTSDBStoragePlugin) registry.getPlugin(storage);
     this.tabletScanSpecList = tabletScanSpecList;
-    this.storage = (OpenTSDBStoragePluginConfig) storage;
+    this.storage = storage;
     this.columns = columns;
   }
 
@@ -112,7 +110,7 @@ public class OpenTSDBSubScan extends AbstractBase implements SubScan {
     return openTSDBStoragePlugin;
   }
 
-  @JsonIgnore
+  @JsonProperty("storage")
   public OpenTSDBStoragePluginConfig getStorageConfig() {
     return storage;
   }

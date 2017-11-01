@@ -21,7 +21,6 @@ import com.google.common.collect.Maps;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
-import org.apache.drill.exec.planner.logical.CreateTableEntry;
 import org.apache.drill.exec.planner.logical.DrillTable;
 import org.apache.drill.exec.planner.logical.DynamicDrillTable;
 import org.apache.drill.exec.store.AbstractSchema;
@@ -37,7 +36,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
@@ -92,11 +90,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public Set<String> getTableNames() {
       return plugin.getClient().getAllMetricNames();
-    }
-
-    @Override
-    public CreateTableEntry createNewTable(final String tableName, List<String> partitionColumns) {
-      return null;
     }
 
     @Override
