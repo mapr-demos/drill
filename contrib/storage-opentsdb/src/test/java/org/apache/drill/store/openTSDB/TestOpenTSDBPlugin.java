@@ -116,38 +116,24 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
   }
 
   @Test
-  public void testBasicQueryFROMWithTableName() throws Exception {
-    setupPOSTStubs();
-    setupGETStubs();
-    base.runSQLVerifyCount("select * from openTSDB.`warp.speed.test`", 18);
-  }
-
-  @Test
   public void testBasicQueryFROMWithRequiredParams() throws Exception {
     setupPOSTStubs();
     setupGETStubs();
-    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test)`", 18);
-  }
-
-  @Test
-  public void testBasicQueryFROMWithParameters() throws Exception {
-    setupPOSTStubs();
-    setupGETStubs();
-    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test, aggregator=sum)`", 18);
+    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test, start=47y-ago, aggregator=sum)`", 18);
   }
 
   @Test
   public void testBasicQueryGROUPBY() throws Exception {
     setupPOSTStubs();
     setupGETStubs();
-    base.runSQLVerifyCount("select `timestamp`, sum(`aggregated value`) from openTSDB.`(metric=warp.speed.test, aggregator=sum)` group by `timestamp`", 15);
+    base.runSQLVerifyCount("select `timestamp`, sum(`aggregated value`) from openTSDB.`(metric=warp.speed.test, aggregator=sum, start=47y-ago)` group by `timestamp`", 15);
   }
 
   @Test
   public void testBasicQueryFROMWithInterpolationParam() throws Exception {
     setupPOSTStubs();
     setupGETStubs();
-    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test, downsample=5y-avg)`", 4);
+    base.runSQLVerifyCount("select * from openTSDB.`(metric=warp.speed.test, aggregator=sum, start=47y-ago, downsample=5y-avg)`", 4);
   }
 
   @Test(expected = UserRemoteException.class)

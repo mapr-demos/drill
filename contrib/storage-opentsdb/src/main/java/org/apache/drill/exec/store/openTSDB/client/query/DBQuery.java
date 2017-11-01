@@ -18,9 +18,8 @@
 package org.apache.drill.exec.store.openTSDB.client.query;
 
 import java.util.HashSet;
+import java.util.Objects;
 import java.util.Set;
-
-import static org.apache.drill.exec.store.openTSDB.Constants.DEFAULT_TIME;
 
 /**
  * DBQuery is an abstraction of an openTSDB query,
@@ -55,13 +54,14 @@ public class DBQuery {
 
   public static class Builder {
 
-    private String start = DEFAULT_TIME;
+    private String start;
     private Set<Query> queries = new HashSet<>();
 
     public Builder() {
     }
 
     public Builder setStartTime(String startTime) {
+      Objects.requireNonNull(startTime, "start must be specified");
       this.start = startTime;
       return this;
     }

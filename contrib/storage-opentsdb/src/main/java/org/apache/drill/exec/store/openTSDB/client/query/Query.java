@@ -19,8 +19,7 @@ package org.apache.drill.exec.store.openTSDB.client.query;
 
 import java.util.HashMap;
 import java.util.Map;
-
-import static org.apache.drill.exec.store.openTSDB.Constants.SUM_AGGREGATOR;
+import java.util.Objects;
 
 /**
  * Query is an abstraction of openTSDB subQuery
@@ -85,7 +84,7 @@ public class Query {
 
   public static class Builder {
 
-    private String aggregator = SUM_AGGREGATOR;
+    private String aggregator;
     private String metric;
     private String rate;
     private String downsample;
@@ -96,35 +95,29 @@ public class Query {
     }
 
     public Builder setAggregator(String aggregator) {
-      if (aggregator != null) {
-        this.aggregator = aggregator;
-      }
+      Objects.requireNonNull(aggregator, "aggregator must be specified");
+      this.aggregator = aggregator;
       return this;
     }
 
     public Builder setMetric(String metric) {
+      Objects.requireNonNull(metric, "metric must be specified");
       this.metric = metric;
       return this;
     }
 
     public Builder setRate(String rate) {
-      if (rate != null) {
-        this.rate = rate;
-      }
+      this.rate = rate;
       return this;
     }
 
     public Builder setDownsample(String downsample) {
-      if (downsample != null) {
-        this.downsample = downsample;
-      }
+      this.downsample = downsample;
       return this;
     }
 
     public Builder setTags(Map<String, String> tags) {
-      if (tags != null) {
-        this.tags = tags;
-      }
+      this.tags = tags;
       return this;
     }
 

@@ -23,8 +23,11 @@ import org.slf4j.LoggerFactory;
 
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
 
+import static org.apache.drill.exec.store.openTSDB.Constants.*;
+import static org.apache.drill.exec.store.openTSDB.Util.getValidTableName;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATED_VALUE;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.AGGREGATE_TAGS;
 import static org.apache.drill.exec.store.openTSDB.client.Schema.DefaultColumns.METRIC;
@@ -40,10 +43,11 @@ public class Schema {
 
   private final List<ColumnDTO> columns = new ArrayList<>();
   private final Service db;
+  private final String name;
 
   public Schema(Service db, String name) {
     this.db = db;
-    db.setupQueryParameters(name);
+    this.name = name;
     setupStructure();
   }
 
@@ -52,7 +56,7 @@ public class Schema {
     columns.add(new ColumnDTO(AGGREGATE_TAGS.toString(), OpenTSDBTypes.STRING));
     columns.add(new ColumnDTO(TIMESTAMP.toString(), OpenTSDBTypes.TIMESTAMP));
     columns.add(new ColumnDTO(AGGREGATED_VALUE.toString(), OpenTSDBTypes.DOUBLE));
-    columns.addAll(db.getUnfixedColumns());
+    columns.addAll(db.getUnfixedColumns(getParamsForQuery()));
   }
 
   /**
@@ -79,6 +83,16 @@ public class Schema {
    */
   public ColumnDTO getColumnByIndex(int columnIndex) {
     return columns.get(columnIndex);
+  }
+
+  // Create map with required params, for querying metrics.
+  // Without this params, we cannot make API request to db.
+  private HashMap<String, String> getParamsForQuery() {
+    HashMap<String, String> params = new HashMap<>();
+    params.put(METRIC_PARAM, getValidTableName(name));
+    params.put(AGGREGATOR_PARAM, SUM_AGGREGATOR);
+    params.put(TIME_PARAM, DEFAULT_TIME);
+    return params;
   }
 
   /**

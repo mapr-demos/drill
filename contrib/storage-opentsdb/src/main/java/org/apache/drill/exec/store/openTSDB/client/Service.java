@@ -21,16 +21,19 @@ import org.apache.drill.exec.store.openTSDB.dto.ColumnDTO;
 import org.apache.drill.exec.store.openTSDB.dto.MetricDTO;
 
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 public interface Service {
   /**
    *
-   * Used for getting all Metrics from openTSDB
+   * Used for getting all Metrics from openTSDB.
+   * Must be present required params: metric, start, aggregator
    *
+   * @param queryParam parameters for the API request
    * @return Set<MetricDTO> all metrics
    */
-  Set<MetricDTO> getAllMetrics();
+  Set<MetricDTO> getAllMetrics(Map<String, String> queryParam);
 
   /**
    *
@@ -43,16 +46,10 @@ public interface Service {
   /**
    *
    * Used for getting all non fixed columns based on tags from openTSDB
+   * Must be present required params: metric, start, aggregator
    *
+   * @param queryParam parameters for the API request
    * @return List<ColumnDTO> columns based on tags
    */
-  List<ColumnDTO> getUnfixedColumns();
-
-  /**
-   *
-   * Used for setup all parameters for API request to openTSDB
-   *
-   * @param rowData with this syntax (metric=warp.speed.test)
-   */
-  void setupQueryParameters(String rowData);
+  List<ColumnDTO> getUnfixedColumns(Map<String, String> queryParam);
 }

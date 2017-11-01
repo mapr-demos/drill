@@ -53,6 +53,8 @@ import java.util.Map;
 import java.util.Set;
 
 import static java.nio.charset.StandardCharsets.UTF_8;
+import static org.apache.drill.exec.store.openTSDB.Constants.METRIC_PARAM;
+import static org.apache.drill.exec.store.openTSDB.Util.parseFromRowData;
 
 public class OpenTSDBRecordReader extends AbstractRecordReader {
 
@@ -65,23 +67,25 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
   private Iterator<MetricDTO> tableIterator;
   private OutputMutator output;
   private ImmutableList<ProjectedColumnInfo> projectedCols;
-  private OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec;
+
+  private Map<String, String> params;
 
   public OpenTSDBRecordReader(Service client, OpenTSDBSubScan.OpenTSDBSubScanSpec subScanSpec,
                        List<SchemaPath> projectedColumns) throws IOException {
     setColumns(projectedColumns);
     this.db = client;
-    this.subScanSpec = subScanSpec;
-    db.setupQueryParameters(subScanSpec.getTableName());
+    this.params =
+            parseFromRowData(subScanSpec.getTableName());
     log.debug("Scan spec: {}", subScanSpec);
   }
 
   @Override
   public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
     this.output = output;
-    Set<MetricDTO> metrics = db.getAllMetrics();
+    Set<MetricDTO> metrics =
+            db.getAllMetrics(params);
     if (metrics == null) {
-      throw new ValidationError(String.format("Table '%s' not found", subScanSpec.getTableName()));
+      throw new ValidationError(String.format("Table '%s' not found", params.get(METRIC_PARAM)));
     }
     this.tableIterator = metrics.iterator();
   }
@@ -133,7 +137,7 @@ public class OpenTSDBRecordReader extends AbstractRecordReader {
 
   private void setupProjectedColsIfItNull() throws SchemaChangeException {
     if (projectedCols == null) {
-      initCols(new Schema(db, subScanSpec.getTableName()));
+      initCols(new Schema(db, params.get(METRIC_PARAM)));
     }
   }
 

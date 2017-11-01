@@ -39,8 +39,6 @@ import java.util.Collections;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.drill.exec.store.openTSDB.Util.getValidTableName;
-
 public class OpenTSDBSchemaFactory implements SchemaFactory {
 
   private static final Logger log = LoggerFactory.getLogger(OpenTSDBSchemaFactory.class);
@@ -79,7 +77,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public Table getTable(String name) {
       OpenTSDBScanSpec scanSpec = new OpenTSDBScanSpec(name);
-      name = getValidTableName(name);
       try {
         return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
       } catch (Exception e) {

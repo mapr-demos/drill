@@ -39,11 +39,10 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static org.apache.drill.exec.store.openTSDB.Constants.AGGREGATOR;
-import static org.apache.drill.exec.store.openTSDB.Constants.DOWNSAMPLE;
-import static org.apache.drill.exec.store.openTSDB.Constants.METRIC;
-import static org.apache.drill.exec.store.openTSDB.Util.isTableNameValid;
-import static org.apache.drill.exec.store.openTSDB.Util.parseFromRowData;
+import static org.apache.drill.exec.store.openTSDB.Constants.AGGREGATOR_PARAM;
+import static org.apache.drill.exec.store.openTSDB.Constants.DOWNSAMPLE_PARAM;
+import static org.apache.drill.exec.store.openTSDB.Constants.METRIC_PARAM;
+import static org.apache.drill.exec.store.openTSDB.Constants.TIME_PARAM;
 
 public class ServiceImpl implements Service {
 
@@ -51,7 +50,6 @@ public class ServiceImpl implements Service {
       LoggerFactory.getLogger(ServiceImpl.class);
 
   private final OpenTSDB client;
-  private Map<String, String> queryParameters;
 
   public ServiceImpl(String connectionURL) {
     this.client = new Retrofit.Builder()
@@ -62,8 +60,8 @@ public class ServiceImpl implements Service {
   }
 
   @Override
-  public Set<MetricDTO> getAllMetrics() {
-    return getAllMetricsByTags();
+  public Set<MetricDTO> getAllMetrics(Map<String, String> queryParams) {
+    return getAllMetricsByTags(queryParams);
   }
 
   @Override
@@ -72,8 +70,8 @@ public class ServiceImpl implements Service {
   }
 
   @Override
-  public List<ColumnDTO> getUnfixedColumns() {
-    Set<MetricDTO> metrics = getAllMetricsByTags();
+  public List<ColumnDTO> getUnfixedColumns(Map<String, String> queryParam) {
+    Set<MetricDTO> metrics = getAllMetricsByTags(queryParam);
     List<ColumnDTO> unfixedColumns = new ArrayList<>();
 
     for (MetricDTO metric : metrics) {
@@ -87,20 +85,9 @@ public class ServiceImpl implements Service {
     return unfixedColumns;
   }
 
-  @Override
-  public void setupQueryParameters(String rowData) {
-    if (!isTableNameValid(rowData)) {
-      this.queryParameters = parseFromRowData(rowData);
-    } else {
-      Map<String, String> params = new HashMap<>();
-      params.put(METRIC, rowData);
-      this.queryParameters = params;
-    }
-  }
-
-  private Set<MetricDTO> getAllMetricsByTags() {
+  private Set<MetricDTO> getAllMetricsByTags(Map<String, String> queryParams) {
     try {
-      return getAllMetricsFromDBByTags();
+      return getAllMetricsFromDBByTags(queryParams);
     } catch (IOException e) {
       throw new DrillRuntimeException("Cannot connect to the db. " +
               "Maybe you have incorrect connection params or db unavailable now", e);
@@ -120,34 +107,35 @@ public class ServiceImpl implements Service {
     return client.getTables(base).execute().body();
   }
 
-  private Set<MetricDTO> getAllMetricsFromDBByTags() throws IOException {
+  private Set<MetricDTO> getAllMetricsFromDBByTags(Map<String, String> queryParams) throws IOException {
     Map<String, String> tags = new HashMap<>();
-    DBQuery baseQuery = getConfiguredDbQuery(tags);
+    DBQuery baseQuery = getConfiguredDbQuery(tags, queryParams);
 
     Set<MetricDTO> metrics = getBaseMetric(baseQuery);
     Set<String> extractedTags = getTagsFromMetrics(metrics);
 
-    return getMetricsByTags(extractedTags);
+    return getMetricsByTags(extractedTags, queryParams);
   }
 
-  private Set<MetricDTO> getMetricsByTags(Set<String> extractedTags) throws IOException {
+  private Set<MetricDTO> getMetricsByTags(Set<String> extractedTags, Map<String, String> queryParams) throws IOException {
     Set<MetricDTO> metrics = new HashSet<>();
     for (String value : extractedTags) {
-      metrics.addAll(getMetricsByTags(getConfiguredDbQuery(getTransformedTag(value))));
+      metrics.addAll(getMetricsByTags(getConfiguredDbQuery(getTransformedTag(value), queryParams)));
     }
     return metrics;
   }
 
-  private DBQuery getConfiguredDbQuery(Map<String, String> tags) {
-    Query subQuery = new Query.Builder(queryParameters.get(METRIC))
-        .setAggregator(queryParameters.get(AGGREGATOR))
-        .setDownsample(queryParameters.get(DOWNSAMPLE))
+  private DBQuery getConfiguredDbQuery(Map<String, String> tags, Map<String, String> queryParams) {
+    Query subQuery = new Query.Builder(queryParams.get(METRIC_PARAM))
+        .setAggregator(queryParams.get(AGGREGATOR_PARAM))
+        .setDownsample(queryParams.get(DOWNSAMPLE_PARAM))
         .setTags(tags).build();
 
     Set<Query> queries = new HashSet<>();
     queries.add(subQuery);
 
     return new DBQuery.Builder()
+        .setStartTime(queryParams.get(TIME_PARAM))
         .setQueries(queries)
         .build();
   }
