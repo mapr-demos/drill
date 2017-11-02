@@ -17,6 +17,8 @@
  */
 package org.apache.drill.exec.store.openTSDB.client.query;
 
+import org.apache.drill.common.exceptions.DrillRuntimeException;
+
 import java.util.HashSet;
 import java.util.Objects;
 import java.util.Set;
@@ -67,6 +69,10 @@ public class DBQuery {
     }
 
     public Builder setQueries(Set<Query> queries) {
+      if (queries.isEmpty()) {
+        throw new DrillRuntimeException("Required params such as metric, aggregator weren't specified. " +
+                "Add this params to the query");
+      }
       this.queries = queries;
       return this;
     }
