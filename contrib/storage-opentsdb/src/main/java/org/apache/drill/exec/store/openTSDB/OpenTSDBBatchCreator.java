@@ -48,6 +48,6 @@ public class OpenTSDBBatchCreator implements BatchCreator<OpenTSDBSubScan> {
         throw new ExecutionSetupException(e);
       }
     }
-    return new ScanBatch(subScan, context, readers.iterator());
+    return new ScanBatch(subScan, context, readers);
   }
 }
