@@ -64,7 +64,7 @@ public class TestOpenTSDBPlugin extends BaseTestQuery {
   }
 
   private void setupGETStubs() {
-    stubFor(get(urlEqualTo("/api/suggest?type=metrics&max=999"))
+    stubFor(get(urlEqualTo("/api/suggest?type=metrics&max=" + Integer.MAX_VALUE))
         .willReturn(aResponse()
             .withStatus(200)
             .withHeader("Content-Type", "application/json")

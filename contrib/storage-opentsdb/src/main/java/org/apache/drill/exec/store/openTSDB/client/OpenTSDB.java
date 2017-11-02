@@ -36,7 +36,7 @@ public interface OpenTSDB {
    *
    * @return Set<String> with all tables names
    */
-  @GET("api/suggest?type=metrics&max=999")
+  @GET("api/suggest?type=metrics&max=" + Integer.MAX_VALUE)
   Call<Set<String>> getAllTablesName();
 
   /**
