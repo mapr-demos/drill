@@ -17,6 +17,7 @@
  */
 package org.apache.drill.exec.store.parquet;
 
+import static java.lang.Math.ceil;
 import static java.lang.Math.max;
 import static java.lang.Math.min;
 
@@ -49,12 +50,12 @@ import org.apache.drill.exec.vector.complex.reader.FieldReader;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
+import org.apache.parquet.bytes.CapacityByteArrayOutputStream;
 import org.apache.parquet.column.ColumnWriteStore;
 import org.apache.parquet.column.ParquetProperties.WriterVersion;
 import org.apache.parquet.column.impl.ColumnWriteStoreV1;
-import org.apache.parquet.column.page.PageWriteStore;
 import org.apache.parquet.hadoop.CodecFactory;
-import org.apache.parquet.hadoop.ColumnChunkPageWriteStoreExposer;
+import org.apache.parquet.hadoop.ParquetColumnChunkPageWriteStore;
 import org.apache.parquet.hadoop.ParquetFileWriter;
 import org.apache.parquet.hadoop.metadata.CompressionCodecName;
 import org.apache.parquet.io.ColumnIOFactory;
@@ -77,6 +78,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   private static final int MINIMUM_BUFFER_SIZE = 64 * 1024;
   private static final int MINIMUM_RECORD_COUNT_FOR_CHECK = 100;
   private static final int MAXIMUM_RECORD_COUNT_FOR_CHECK = 10000;
+  private static final int BLOCKSIZE_MULTIPLE = 64 * 1024;
 
   public static final String DRILL_VERSION_PROPERTY = "drill.version";
   public static final String WRITER_VERSION_PROPERTY = "drill-writer.version";
@@ -89,6 +91,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   private int pageSize;
   private int dictionaryPageSize;
   private boolean enableDictionary = false;
+  private boolean useSingleFSBlock = false;
   private CompressionCodecName codec = CompressionCodecName.SNAPPY;
   private WriterVersion writerVersion = WriterVersion.PARQUET_1_0;
   private CodecFactory codecFactory;
@@ -97,7 +100,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   private long recordCountForNextMemCheck = MINIMUM_RECORD_COUNT_FOR_CHECK;
 
   private ColumnWriteStore store;
-  private PageWriteStore pageStore;
+  private ParquetColumnChunkPageWriteStore pageStore;
 
   private RecordConsumer consumer;
   private BatchSchema batchSchema;
@@ -121,7 +124,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
     this.hasPartitions = partitionColumns != null && partitionColumns.size() > 0;
     this.extraMetaData.put(DRILL_VERSION_PROPERTY, DrillVersionInfo.getVersion());
     this.extraMetaData.put(WRITER_VERSION_PROPERTY, String.valueOf(ParquetWriter.WRITER_VERSION));
-    this.storageStrategy = writer.getStorageStrategy() == null ? StorageStrategy.PERSISTENT : writer.getStorageStrategy();
+    this.storageStrategy = writer.getStorageStrategy() == null ? StorageStrategy.DEFAULT : writer.getStorageStrategy();
     this.cleanUpLocations = Lists.newArrayList();
   }
 
@@ -156,6 +159,12 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
     }
 
     enableDictionary = Boolean.parseBoolean(writerOptions.get(ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING));
+    useSingleFSBlock = Boolean.parseBoolean(writerOptions.get(ExecConstants.PARQUET_WRITER_USE_SINGLE_FS_BLOCK));
+
+    if (useSingleFSBlock) {
+      // Round up blockSize to multiple of 64K.
+      blockSize = (int)ceil((double)blockSize/BLOCKSIZE_MULTIPLE) * BLOCKSIZE_MULTIPLE;
+    }
   }
 
   private boolean containsComplexVectors(BatchSchema schema) {
@@ -190,18 +199,28 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   private void newSchema() throws IOException {
     List<Type> types = Lists.newArrayList();
     for (MaterializedField field : batchSchema) {
-      if (field.getPath().equalsIgnoreCase(WriterPrel.PARTITION_COMPARATOR_FIELD)) {
+      if (field.getName().equalsIgnoreCase(WriterPrel.PARTITION_COMPARATOR_FIELD)) {
         continue;
       }
       types.add(getType(field));
     }
     schema = new MessageType("root", types);
 
+    // We don't want this number to be too small, ideally we divide the block equally across the columns.
+    // It is unlikely all columns are going to be the same size.
+    // Its value is likely below Integer.MAX_VALUE (2GB), although rowGroupSize is a long type.
+    // Therefore this size is cast to int, since allocating byte array in under layer needs to
+    // limit the array size in an int scope.
     int initialBlockBufferSize = max(MINIMUM_BUFFER_SIZE, blockSize / this.schema.getColumns().size() / 5);
-    pageStore = ColumnChunkPageWriteStoreExposer.newColumnChunkPageWriteStore(this.oContext,
-        codecFactory.getCompressor(codec),
-        schema);
+    // We don't want this number to be too small either. Ideally, slightly bigger than the page size,
+    // but not bigger than the block buffer
     int initialPageBufferSize = max(MINIMUM_BUFFER_SIZE, min(pageSize + pageSize / 10, initialBlockBufferSize));
+    // TODO: Use initialSlabSize from ParquetProperties once drill will be updated to the latest version of Parquet library
+    int initialSlabSize = CapacityByteArrayOutputStream.initialSlabSizeHeuristic(64, pageSize, 10);
+    // TODO: Replace ParquetColumnChunkPageWriteStore with ColumnChunkPageWriteStore from parquet library
+    // once PARQUET-1006 will be resolved
+    pageStore = new ParquetColumnChunkPageWriteStore(codecFactory.getCompressor(codec), schema, initialSlabSize,
+        pageSize, new ParquetDirectByteBufferAllocator(oContext));
     store = new ColumnWriteStoreV1(pageStore, pageSize, initialPageBufferSize, enableDictionary,
         writerVersion, new ParquetDirectByteBufferAllocator(oContext));
     MessageColumnIO columnIO = new ColumnIOFactory(false).getColumnIO(this.schema);
@@ -211,7 +230,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
 
   private PrimitiveType getPrimitiveType(MaterializedField field) {
     MinorType minorType = field.getType().getMinorType();
-    String name = field.getLastName();
+    String name = field.getName();
     PrimitiveTypeName primitiveTypeName = ParquetTypeHelper.getPrimitiveTypeNameForMinorType(minorType);
     Repetition repetition = ParquetTypeHelper.getRepetitionForDataMode(field.getDataMode());
     OriginalType originalType = ParquetTypeHelper.getOriginalTypeForMinorType(minorType);
@@ -229,7 +248,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
         for (MaterializedField childField : field.getChildren()) {
           types.add(getType(childField));
         }
-        return new GroupType(dataMode == DataMode.REPEATED ? Repetition.REPEATED : Repetition.OPTIONAL, field.getLastName(), types);
+        return new GroupType(dataMode == DataMode.REPEATED ? Repetition.REPEATED : Repetition.OPTIONAL, field.getName(), types);
       case LIST:
         throw new UnsupportedOperationException("Unsupported type " + minorType);
       default:
@@ -254,26 +273,27 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
   }
 
   private void flush() throws IOException {
-    if (recordCount > 0) {
-      parquetFileWriter.startBlock(recordCount);
-      consumer.flush();
-      store.flush();
-      ColumnChunkPageWriteStoreExposer.flushPageStore(pageStore, parquetFileWriter);
-      recordCount = 0;
-      parquetFileWriter.endBlock();
+    try {
+      if (recordCount > 0) {
+        parquetFileWriter.startBlock(recordCount);
+        consumer.flush();
+        store.flush();
+        pageStore.flushToFileWriter(parquetFileWriter);
+        recordCount = 0;
+        parquetFileWriter.endBlock();
 
-      // we are writing one single block per file
-      parquetFileWriter.end(extraMetaData);
-      parquetFileWriter = null;
+        // we are writing one single block per file
+        parquetFileWriter.end(extraMetaData);
+        parquetFileWriter = null;
+      }
+    } finally {
+      store.close();
+      pageStore.close();
+
+      store = null;
+      pageStore = null;
+      index++;
     }
-
-    store.close();
-    // TODO(jaltekruse) - review this close method should no longer be necessary
-//    ColumnChunkPageWriteStoreExposer.close(pageStore);
-
-    store = null;
-    pageStore = null;
-    index++;
   }
 
   private void checkBlockSizeReached() throws IOException {
@@ -380,14 +400,19 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
 
       // since ParquetFileWriter will overwrite empty output file (append is not supported)
       // we need to re-apply file permission
-      parquetFileWriter = new ParquetFileWriter(conf, schema, path, ParquetFileWriter.Mode.OVERWRITE);
+      if (useSingleFSBlock) {
+        // Passing blockSize creates files with this blockSize instead of filesystem default blockSize.
+        // Currently, this is supported only by filesystems included in
+        // BLOCK_FS_SCHEMES (ParquetFileWriter.java in parquet-mr), which includes HDFS.
+        // For other filesystems, it uses default blockSize configured for the file system.
+        parquetFileWriter = new ParquetFileWriter(conf, schema, path, ParquetFileWriter.Mode.OVERWRITE, blockSize, 0);
+      } else {
+        parquetFileWriter = new ParquetFileWriter(conf, schema, path, ParquetFileWriter.Mode.OVERWRITE);
+      }
       storageStrategy.applyToFile(fs, path);
-
       parquetFileWriter.start();
     }
-
     recordCount++;
-
     checkBlockSizeReached();
   }
 
@@ -397,7 +422,7 @@ public class ParquetRecordWriter extends ParquetOutputRecordWriter {
     for (Path location : cleanUpLocations) {
       try {
         if (fs.exists(location)) {
-          fs.delete(location, false);
+          fs.delete(location, true);
           logger.info("Aborting writer. Location [{}] on file system [{}] is deleted.",
               location.toUri().getPath(), fs.getUri());
         }

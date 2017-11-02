@@ -17,8 +17,13 @@
  */
 package org.apache.drill.test;
 
+import java.io.BufferedReader;
 import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
+import java.io.Reader;
+import java.io.StringReader;
 import java.util.List;
 import java.util.Properties;
 
@@ -27,10 +32,21 @@ import org.apache.drill.TestBuilder;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.client.DrillClient;
 import org.apache.drill.exec.memory.BufferAllocator;
+import org.apache.drill.exec.record.BatchSchema;
 import org.apache.drill.exec.rpc.RpcException;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
+import org.apache.drill.exec.testing.Controls;
+import org.apache.drill.exec.testing.ControlsInjectionUtil;
 import org.apache.drill.test.ClusterFixture.FixtureTestServices;
 import org.apache.drill.test.QueryBuilder.QuerySummary;
+import org.apache.drill.test.rowSet.RowSetBuilder;
+
+/**
+ * Represents a Drill client. Provides many useful test-specific operations such
+ * as setting system options, running queries, and using the @{link TestBuilder}
+ * class.
+ * @see ExampleTest ExampleTest for usage examples
+ */
 
 public class ClientFixture implements AutoCloseable {
 
@@ -41,22 +57,25 @@ public class ClientFixture implements AutoCloseable {
 
     protected ClientBuilder(ClusterFixture cluster) {
       this.cluster = cluster;
+      clientProps = cluster.getClientProps();
     }
+
     /**
      * Specify an optional client property.
      * @param key property name
      * @param value property value
      * @return this builder
      */
-    public ClientBuilder property( String key, Object value ) {
-      if ( clientProps == null ) {
-        clientProps = new Properties( );
+
+    public ClientBuilder property(String key, Object value) {
+      if (clientProps == null) {
+        clientProps = new Properties();
       }
       clientProps.put(key, value);
       return this;
     }
 
-    ClientFixture build( ) {
+    public ClientFixture build() {
       try {
         return new ClientFixture(this);
       } catch (RpcException e) {
@@ -77,14 +96,18 @@ public class ClientFixture implements AutoCloseable {
 
     // Create a client.
 
-    client = new DrillClient(cluster.config( ), cluster.serviceSet( ).getCoordinator());
+    if (cluster.usesZK()) {
+      client = new DrillClient(cluster.config());
+    } else {
+      client = new DrillClient(cluster.config(), cluster.serviceSet().getCoordinator());
+    }
     client.connect(builder.clientProps);
     cluster.clients.add(this);
   }
 
   public DrillClient client() { return client; }
-  public ClusterFixture cluster( ) { return cluster; }
-  public BufferAllocator allocator( ) { return cluster.allocator( ); }
+  public ClusterFixture cluster() { return cluster; }
+  public BufferAllocator allocator() { return client.getAllocator(); }
 
   /**
    * Set a runtime option.
@@ -94,14 +117,29 @@ public class ClientFixture implements AutoCloseable {
    * @throws RpcException
    */
 
-  public void alterSession(String key, Object value ) throws Exception {
-    String sql = "ALTER SESSION SET `" + key + "` = " + ClusterFixture.stringify( value );
-    runSqlSilently( sql );
+  public void alterSession(String key, Object value) {
+    String sql = "ALTER SESSION SET `" + key + "` = " + ClusterFixture.stringify(value);
+    runSqlSilently(sql);
   }
 
-  public void alterSystem(String key, Object value ) throws Exception {
-    String sql = "ALTER SYSTEM SET `" + key + "` = " + ClusterFixture.stringify( value );
-    runSqlSilently( sql );
+  public void alterSystem(String key, Object value) {
+    String sql = "ALTER SYSTEM SET `" + key + "` = " + ClusterFixture.stringify(value);
+    runSqlSilently(sql);
+  }
+
+  /**
+   * Reset a system option
+   * @param key
+   */
+
+  public void resetSystem(String key) {
+    String sql = "ALTER SYSTEM RESET `" + key + "`";
+    runSqlSilently(sql);
+  }
+
+  public void resetSession(String key) {
+    String sql = "ALTER SESSION RESET `" + key + "`";
+    runSqlSilently(sql);
   }
 
   /**
@@ -111,8 +149,14 @@ public class ClientFixture implements AutoCloseable {
    * @throws RpcException
    */
 
-  public void runSqlSilently(String sql) throws Exception {
-    queryBuilder().sql(sql).run();
+  public void runSqlSilently(String sql) {
+    try {
+      queryBuilder().sql(sql).run();
+    } catch (Exception e) {
+      // Should not fail during tests. Convert exception to unchecked
+      // to simplify test code.
+      new IllegalStateException(e);
+    }
   }
 
   public QueryBuilder queryBuilder() {
@@ -147,17 +191,17 @@ public class ClientFixture implements AutoCloseable {
       if (trimmedQuery.isEmpty()) {
         continue;
       }
-      queryBuilder( ).sql(trimmedQuery).print();
+      queryBuilder().sql(trimmedQuery).print();
     }
   }
 
   @Override
-  public void close( ) {
+  public void close() {
     if (client == null) {
       return;
     }
     try {
-      client.close( );
+      client.close();
     } finally {
       client = null;
       cluster.clients.remove(this);
@@ -185,11 +229,141 @@ public class ClientFixture implements AutoCloseable {
    */
 
   public ProfileParser parseProfile(String queryId) throws IOException {
-    String tmpDir = cluster().config().getString(ExecConstants.DRILL_TMP_DIR);
-    File drillTmp = new File(new File(tmpDir), "drill");
-    File profileDir = new File(drillTmp, "profiles" );
-    File file = new File( profileDir, queryId + ".sys.drill" );
+    File file = new File(cluster.getProfileDir(), queryId + ".sys.drill");
     return new ProfileParser(file);
   }
 
+  /**
+   * Set a set of injection controls that apply <b>on the next query
+   * only</b>. That query should be your target query, but may
+   * accidentally be an ALTER SESSION, EXPLAIN, etc. So, call this just
+   * before the SELECT statement.
+   *
+   * @param controls the controls string created by
+   * {@link Controls#newBuilder()} builder.
+   */
+
+  public void setControls(String controls) {
+    ControlsInjectionUtil.validateControlsString(controls);
+    alterSession(ExecConstants.DRILLBIT_CONTROL_INJECTIONS, controls);
+  }
+
+  public RowSetBuilder rowSetBuilder(BatchSchema schema) {
+    return new RowSetBuilder(allocator(), schema);
+  }
+
+  /**
+   * Very simple parser for semi-colon separated lists of SQL statements which
+   * handles quoted semicolons. Drill can execute only one statement at a time
+   * (without a trailing semi-colon.) This parser breaks up a statement list
+   * into single statements. Input:<code><pre>
+   * USE a.b;
+   * ALTER SESSION SET `foo` = ";";
+   * SELECT * FROM bar WHERE x = "\";";
+   * </pre><code>Output:
+   * <ul>
+   * <li><tt>USE a.b</tt></li>
+   * <li><tt>ALTER SESSION SET `foo` = ";"</tt></li>
+   * <li><tt>SELECT * FROM bar WHERE x = "\";"</tt></li>
+   */
+
+  public static class StatementParser {
+    private final Reader in;
+    private StringBuilder buf;
+
+    public StatementParser(Reader in) {
+      this.in = in;
+    }
+
+    public String parseNext() throws IOException {
+      boolean eof = false;
+      buf = new StringBuilder();
+      for (;;) {
+        int c = in.read();
+        if (c == -1) {
+          eof = true;
+          break;
+        }
+        if (c == ';') {
+          break;
+        }
+        buf.append((char) c);
+        if (c == '"' || c == '\'' || c == '`') {
+          int quote = c;
+          boolean escape = false;
+          for (;;) {
+            c = in.read();
+            if (c == -1) {
+              throw new IllegalArgumentException("Mismatched quote: " + (char) c);
+            }
+            buf.append((char) c);
+            if (! escape && c == quote) {
+              break;
+            }
+            escape = c == '\\';
+          }
+        }
+      }
+      String stmt = buf.toString().trim();
+      if (stmt.isEmpty() && eof) {
+        return null;
+      }
+      return stmt;
+    }
+  }
+
+  private boolean trace = false;
+
+  public void enableTrace(boolean flag) {
+    this.trace = flag;
+  }
+
+  public int exec(Reader in) throws IOException {
+    StatementParser parser = new StatementParser(in);
+    int count = 0;
+    for (;;) {
+      String stmt = parser.parseNext();
+      if (stmt == null) {
+        if (trace) {
+          System.out.println("----");
+        }
+        return count;
+      }
+      if (stmt.isEmpty()) {
+        continue;
+      }
+      if (trace) {
+        System.out.println("----");
+        System.out.println(stmt);
+      }
+      runSqlSilently(stmt);
+      count++;
+    }
+  }
+
+  /**
+   * Execute a set of statements from a file.
+   * @param stmts the set of statements, separated by semicolons
+   * @return the number of statements executed
+   */
+
+  public int exec(File source) throws FileNotFoundException, IOException {
+    try (Reader in = new BufferedReader(new FileReader(source))) {
+      return exec(in);
+    }
+  }
+
+  /**
+   * Execute a set of statements from a string.
+   * @param stmts the set of statements, separated by semicolons
+   * @return the number of statements executed
+   */
+
+  public int exec(String stmts) {
+    try (Reader in = new StringReader(stmts)) {
+      return exec(in);
+    } catch (IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
 }

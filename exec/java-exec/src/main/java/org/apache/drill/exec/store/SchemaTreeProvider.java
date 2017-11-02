@@ -17,6 +17,9 @@
  */
 package org.apache.drill.exec.store;
 
+import java.io.IOException;
+import java.util.List;
+
 import org.apache.calcite.jdbc.SimpleCalciteSchema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.drill.common.AutoCloseables;
@@ -30,9 +33,6 @@ import org.apache.drill.exec.store.SchemaConfig.SchemaConfigInfoProvider;
 import org.apache.drill.exec.util.ImpersonationUtil;
 
 import com.google.common.collect.Lists;
-
-import java.io.IOException;
-import java.util.List;
 
 /**
  * Class which creates new schema trees. It keeps track of newly created schema trees and closes them safely as
@@ -69,6 +69,14 @@ public class SchemaTreeProvider implements AutoCloseable {
       public OptionValue getOption(String optionKey) {
         return options.getOption(optionKey);
       }
+
+      @Override public SchemaPlus getRootSchema(String userName) {
+        return createRootSchema(userName, this);
+      }
+
+      @Override public String getQueryUserName() {
+        return ImpersonationUtil.getProcessUserName();
+      }
     };
 
     final SchemaConfig schemaConfig = SchemaConfig.newBuilder(
@@ -104,9 +112,16 @@ public class SchemaTreeProvider implements AutoCloseable {
       return rootSchema;
     } catch(IOException e) {
       // We can't proceed further without a schema, throw a runtime exception.
+      // Improve the error message for client side.
+
+      final String contextString = isImpersonationEnabled ? "[Hint: Username is absent in connection URL or doesn't " +
+          "exist on Drillbit node. Please specify a username in connection URL which is present on Drillbit node.]" :
+          "";
       throw UserException
           .resourceError(e)
           .message("Failed to create schema tree.")
+          .addContext("IOException: ", e.getMessage())
+          .addContext(contextString)
           .build(logger);
     }
   }

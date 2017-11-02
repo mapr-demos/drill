@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -719,6 +719,54 @@ public class TestJsonReader extends BaseTestQuery {
     } finally {
       testNoResult("alter session reset `store.json.all_text_mode`");
       testNoResult("alter session reset `exec.enable_union_type`");
+    }
+  }
+
+  @Test // DRILL-5521
+  public void testKvgenWithUnionAll() throws Exception {
+    File directory = new File(BaseTestQuery.getTempDir("json/input"));
+    try {
+      directory.mkdirs();
+      String fileName = "map.json";
+      try (BufferedWriter writer = new BufferedWriter(new FileWriter(new File(directory, fileName)))) {
+        writer.write("{\"rk\": \"a\", \"m\": {\"a\":\"1\"}}");
+      }
+
+      String query = String.format("select kvgen(m) as res from (select m from dfs_test.`%s/%s` union all " +
+          "select convert_from('{\"a\" : null}' ,'json') as m from (values(1)))", directory.toPath().toString(), fileName);
+      assertEquals("Row count should match", 2, testSql(query));
+
+    } finally {
+      org.apache.commons.io.FileUtils.deleteQuietly(directory);
+    }
+  }
+
+  @Test // DRILL-4264
+  public void testFieldWithDots() throws Exception {
+    File directory = new File(BaseTestQuery.getTempDir("json/input"));
+    try {
+      directory.mkdirs();
+      String fileName = "table.json";
+      try (BufferedWriter writer = new BufferedWriter(new FileWriter(new File(directory, fileName)))) {
+        writer.write("{\"rk.q\": \"a\", \"m\": {\"a.b\":\"1\", \"a\":{\"b\":\"2\"}, \"c\":\"3\"}}");
+      }
+
+      String query = String.format("select t.m.`a.b` as a,\n" +
+                                          "t.m.a.b as b,\n" +
+                                          "t.m['a.b'] as c,\n" +
+                                          "t.rk.q as d,\n" +
+                                          "t.`rk.q` as e\n" +
+                                    "from dfs_test.`%s/%s` t",
+                                  directory.toPath().toString(), fileName);
+      testBuilder()
+        .sqlQuery(query)
+        .unOrdered()
+        .baselineColumns("a", "b", "c", "d", "e")
+        .baselineValues("1", "2", "1", null, "a")
+        .go();
+
+    } finally {
+      org.apache.commons.io.FileUtils.deleteQuietly(directory);
     }
   }
 }

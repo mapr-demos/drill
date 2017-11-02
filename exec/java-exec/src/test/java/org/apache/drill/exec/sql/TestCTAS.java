@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -20,15 +20,26 @@ package org.apache.drill.exec.sql;
 import com.google.common.collect.Maps;
 import org.apache.commons.io.FileUtils;
 import org.apache.drill.BaseTestQuery;
+import org.apache.drill.categories.SqlTest;
+import org.apache.drill.categories.UnlikelyTest;
+import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.proto.UserBitShared;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
+import org.apache.drill.exec.store.StorageStrategy;
+import org.apache.hadoop.fs.FileSystem;
+import org.apache.hadoop.fs.Path;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 import java.io.File;
 import java.util.Map;
 
+import static org.junit.Assert.assertEquals;
+
+@Category(SqlTest.class)
 public class TestCTAS extends BaseTestQuery {
   @Test // DRILL-2589
+  @Category(UnlikelyTest.class)
   public void withDuplicateColumnsInDef1() throws Exception {
     ctasErrorTestHelper("CREATE TABLE %s.%s AS SELECT region_id, region_id FROM cp.`region.json`",
         String.format("Duplicate column name [%s]", "region_id")
@@ -36,6 +47,7 @@ public class TestCTAS extends BaseTestQuery {
   }
 
   @Test // DRILL-2589
+  @Category(UnlikelyTest.class)
   public void withDuplicateColumnsInDef2() throws Exception {
     ctasErrorTestHelper("CREATE TABLE %s.%s AS SELECT region_id, sales_city, sales_city FROM cp.`region.json`",
         String.format("Duplicate column name [%s]", "sales_city")
@@ -43,6 +55,7 @@ public class TestCTAS extends BaseTestQuery {
   }
 
   @Test // DRILL-2589
+  @Category(UnlikelyTest.class)
   public void withDuplicateColumnsInDef3() throws Exception {
     ctasErrorTestHelper(
         "CREATE TABLE %s.%s(regionid, regionid) " +
@@ -52,6 +65,7 @@ public class TestCTAS extends BaseTestQuery {
   }
 
   @Test // DRILL-2589
+  @Category(UnlikelyTest.class)
   public void withDuplicateColumnsInDef4() throws Exception {
     ctasErrorTestHelper(
         "CREATE TABLE %s.%s(regionid, salescity, salescity) " +
@@ -61,6 +75,7 @@ public class TestCTAS extends BaseTestQuery {
   }
 
   @Test // DRILL-2589
+  @Category(UnlikelyTest.class)
   public void withDuplicateColumnsInDef5() throws Exception {
     ctasErrorTestHelper(
         "CREATE TABLE %s.%s(regionid, salescity, SalesCity) " +
@@ -88,6 +103,7 @@ public class TestCTAS extends BaseTestQuery {
   }
 
   @Test // DRILL-2422
+  @Category(UnlikelyTest.class)
   public void createTableWhenATableWithSameNameAlreadyExists() throws Exception{
     final String newTblName = "createTableWhenTableAlreadyExists";
 
@@ -105,6 +121,7 @@ public class TestCTAS extends BaseTestQuery {
   }
 
   @Test // DRILL-2422
+  @Category(UnlikelyTest.class)
   public void createTableWhenAViewWithSameNameAlreadyExists() throws Exception{
     final String newTblName = "createTableWhenAViewWithSameNameAlreadyExists";
 
@@ -273,6 +290,26 @@ public class TestCTAS extends BaseTestQuery {
       result.release();
     } finally {
       FileUtils.deleteQuietly(new File(getDfsTestTmpSchemaLocation(), location));
+    }
+  }
+
+  @Test
+  public void createTableWithCustomUmask() throws Exception {
+    test("use %s", TEMP_SCHEMA);
+    String tableName = "with_custom_permission";
+    StorageStrategy storageStrategy = new StorageStrategy("000", false);
+    FileSystem fs = getLocalFileSystem();
+    try {
+      test("alter session set `%s` = '%s'", ExecConstants.PERSISTENT_TABLE_UMASK, storageStrategy.getUmask());
+      test("create table %s as select 'A' from (values(1))", tableName);
+      Path tableLocation = new Path(getDfsTestTmpSchemaLocation(), tableName);
+      assertEquals("Directory permission should match",
+          storageStrategy.getFolderPermission(), fs.getFileStatus(tableLocation).getPermission());
+      assertEquals("File permission should match",
+          storageStrategy.getFilePermission(), fs.listLocatedStatus(tableLocation).next().getPermission());
+    } finally {
+      test("alter session reset `%s`", ExecConstants.PERSISTENT_TABLE_UMASK);
+      test("drop table if exists %s", tableName);
     }
   }
 

@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,6 +23,7 @@ import org.apache.drill.common.util.TestTools;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.exec.proto.BitControl;
+import org.apache.drill.test.OperatorFixture;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
@@ -35,7 +36,6 @@ import org.junit.Test;
 
 import java.io.IOException;
 
-import static org.apache.zookeeper.ZooDefs.OpCode.create;
 import static org.junit.Assert.assertEquals;
 
 public class TestParquetFilterPushDown extends PlanTestBase {
@@ -44,17 +44,16 @@ public class TestParquetFilterPushDown extends PlanTestBase {
   private static final String TEST_RES_PATH = WORKING_PATH + "/src/test/resources";
   private static FragmentContext fragContext;
 
-  static FileSystem fs;
+  private static Configuration conf;
+  private static FileSystem fs;
 
   @BeforeClass
   public static void initFSAndCreateFragContext() throws Exception {
     fragContext = new FragmentContext(bits[0].getContext(),
         BitControl.PlanFragment.getDefaultInstance(), null, bits[0].getContext().getFunctionImplementationRegistry());
 
-    Configuration conf = new Configuration();
-    conf.set(FileSystem.FS_DEFAULT_NAME_KEY, "local");
-
-    fs = FileSystem.get(conf);
+    fs = getLocalFileSystem();
+    conf = fs.getConf();
   }
 
   @AfterClass
@@ -293,7 +292,9 @@ public class TestParquetFilterPushDown extends PlanTestBase {
       testParquetFilterPD(query1, 9, 3, false);
 
     } finally {
-      test("alter session set `" + PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_KEY  + "` = " + PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING.getDefault().bool_val);
+      final OperatorFixture.TestOptionSet testOptionSet = new OperatorFixture.TestOptionSet();
+      test("alter session set `" + PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_KEY  + "` = " +
+        testOptionSet.getDefault(PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_KEY).bool_val);
       deleteTableIfExists(tableName);
     }
   }
@@ -316,7 +317,9 @@ public class TestParquetFilterPushDown extends PlanTestBase {
       testParquetFilterPD(query1, 9, 3, false);
 
     } finally {
-      test("alter session set `" + PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_THRESHOLD_KEY  + "` = " + PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_THRESHOLD.getDefault().num_val);
+      final OperatorFixture.TestOptionSet testOptionSet = new OperatorFixture.TestOptionSet();
+      test("alter session set `" + PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_THRESHOLD_KEY + "` = " +
+        testOptionSet.getDefault(PlannerSettings.PARQUET_ROWGROUP_FILTER_PUSHDOWN_PLANNING_THRESHOLD_KEY).num_val);
       deleteTableIfExists(tableName);
     }
   }
@@ -366,6 +369,20 @@ public class TestParquetFilterPushDown extends PlanTestBase {
     testParquetFilterPD(query3, 49, 2, false);
   }
 
+  @Test // DRILL-5359
+  public void testFilterWithItemFlatten() throws  Exception {
+    final String sql = "select n_regionkey\n"
+        + "from (select n_regionkey, \n"
+        + "            flatten(nation.cities) as cities \n"
+        + "      from cp.`tpch/nation.parquet` nation) as flattenedCities \n"
+        + "where flattenedCities.cities.`zip` = '12345'";
+
+    final String[] expectedPlan = {"(?s)Filter.*Flatten"};
+    final String[] excludedPlan = {};
+
+    PlanTestBase.testPlanMatchingPatterns(sql, expectedPlan, excludedPlan);
+
+  }
 
   //////////////////////////////////////////////////////////////////////////////////////////////////
   // Some test helper functions.
@@ -394,9 +411,7 @@ public class TestParquetFilterPushDown extends PlanTestBase {
   }
 
   private ParquetMetadata getParquetMetaData(String filePathStr) throws IOException{
-    Configuration fsConf = new Configuration();
-    ParquetMetadata footer = ParquetFileReader.readFooter(fsConf, new Path(filePathStr));
-    return footer;
+    return ParquetFileReader.readFooter(new Configuration(conf), new Path(filePathStr));
   }
 
   private static void deleteTableIfExists(String tableName) {

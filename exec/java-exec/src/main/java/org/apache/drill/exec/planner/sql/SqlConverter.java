@@ -21,11 +21,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 
-import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import org.apache.calcite.adapter.java.JavaTypeFactory;
-import org.apache.calcite.avatica.util.Casing;
-import org.apache.calcite.avatica.util.Quoting;
 import org.apache.calcite.jdbc.CalciteSchema;
 import org.apache.calcite.jdbc.CalciteSchemaImpl;
 import org.apache.calcite.jdbc.JavaTypeFactoryImpl;
@@ -48,22 +44,18 @@ import org.apache.calcite.sql.SqlNode;
 import org.apache.calcite.sql.SqlOperatorTable;
 import org.apache.calcite.sql.parser.SqlParseException;
 import org.apache.calcite.sql.parser.SqlParser;
-import org.apache.calcite.sql.parser.SqlParserImplFactory;
 import org.apache.calcite.sql.parser.SqlParserPos;
 import org.apache.calcite.sql.type.SqlTypeName;
 import org.apache.calcite.sql.util.ChainedSqlOperatorTable;
 import org.apache.calcite.sql.validate.SqlConformance;
 import org.apache.calcite.sql.validate.SqlValidatorCatalogReader;
-import org.apache.calcite.sql.validate.SqlValidatorException;
 import org.apache.calcite.sql.validate.SqlValidatorImpl;
 import org.apache.calcite.sql.validate.SqlValidatorScope;
 import org.apache.calcite.sql2rel.RelDecorrelator;
 import org.apache.calcite.sql2rel.SqlToRelConverter;
-import org.apache.commons.lang3.StringUtils;
-import org.apache.commons.lang3.exception.ExceptionUtils;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.UserException;
-import org.apache.drill.exec.exception.FunctionNotFoundException;
+import org.apache.drill.common.types.Types;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.expr.fn.FunctionImplementationRegistry;
 import org.apache.drill.exec.ops.QueryContext;
@@ -72,10 +64,11 @@ import org.apache.drill.exec.planner.cost.DrillCostBase;
 import org.apache.drill.exec.planner.logical.DrillConstExecutor;
 import org.apache.drill.exec.planner.physical.DrillDistributionTraitDef;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
-import org.apache.drill.exec.planner.sql.parser.impl.DrillParserWithCompoundIdConverter;
+import org.apache.drill.exec.rpc.user.UserSession;
 
 import com.google.common.base.Joiner;
-import org.apache.drill.exec.rpc.user.UserSession;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Sets;
 
 /**
  * Class responsible for managing parsing, validation and toRel conversion for sql statements.
@@ -109,9 +102,9 @@ public class SqlConverter {
 
   public SqlConverter(QueryContext context) {
     this.settings = context.getPlannerSettings();
-    this.util = (UdfUtilities) context;
+    this.util = context;
     this.functions = context.getFunctionRegistry();
-    this.parserConfig = new ParserConfig();
+    this.parserConfig = new DrillParserConfig(settings);
     this.sqlToRelConverterConfig = new SqlToRelConverterConfig();
     this.isInnerQuery = false;
     this.typeFactory = new JavaTypeFactoryImpl(DRILL_TYPE_SYSTEM);
@@ -177,11 +170,6 @@ public class SqlConverter {
       SqlNode validatedNode = validator.validate(parsedNode);
       return validatedNode;
     } catch (RuntimeException e) {
-      final Throwable rootCause = ExceptionUtils.getRootCause(e);
-      if (rootCause instanceof SqlValidatorException
-          && StringUtils.contains(rootCause.getMessage(), "No match found for function signature")) {
-        throw new FunctionNotFoundException(rootCause.getMessage(), e);
-      }
       UserException.Builder builder = UserException
           .validationError(e)
           .addContext("SQL Query", sql);
@@ -239,7 +227,7 @@ public class SqlConverter {
       case BINARY:
       case VARCHAR:
       case VARBINARY:
-        return 65536;
+        return Types.MAX_VARCHAR_LENGTH;
       default:
         return super.getDefaultPrecision(typeName);
       }
@@ -290,6 +278,7 @@ public class SqlConverter {
     public Expander() {
     }
 
+    @Override
     public RelNode expandView(RelDataType rowType, String queryString, List<String> schemaPath) {
       final DrillCalciteCatalogReader catalogReader = new DrillCalciteCatalogReader(
           CalciteSchemaImpl.from(rootSchema),
@@ -333,45 +322,10 @@ public class SqlConverter {
     }
 
     private RelNode expandView(String queryString, SqlConverter converter) {
+      converter.disallowTemporaryTables();
       final SqlNode parsedNode = converter.parse(queryString);
       final SqlNode validatedNode = converter.validate(parsedNode);
       return converter.toRel(validatedNode);
-    }
-
-  }
-
-  private class ParserConfig implements SqlParser.Config {
-
-    final long identifierMaxLength = settings.getIdentifierMaxLength();
-
-    @Override
-    public int identifierMaxLength() {
-      return (int) identifierMaxLength;
-    }
-
-    @Override
-    public Casing quotedCasing() {
-      return Casing.UNCHANGED;
-    }
-
-    @Override
-    public Casing unquotedCasing() {
-      return Casing.UNCHANGED;
-    }
-
-    @Override
-    public Quoting quoting() {
-      return Quoting.BACK_TICK;
-    }
-
-    @Override
-    public boolean caseSensitive() {
-      return false;
-    }
-
-    @Override
-    public SqlParserImplFactory parserFactory() {
-      return DrillParserWithCompoundIdConverter.FACTORY;
     }
 
   }
@@ -479,25 +433,27 @@ public class SqlConverter {
     private boolean allowTemporaryTables;
 
     DrillCalciteCatalogReader(CalciteSchema rootSchema,
-                                     boolean caseSensitive,
-                                     List<String> defaultSchema,
-                                     JavaTypeFactory typeFactory,
-                                     DrillConfig drillConfig,
-                                     UserSession session) {
+                              boolean caseSensitive,
+                              List<String> defaultSchema,
+                              JavaTypeFactory typeFactory,
+                              DrillConfig drillConfig,
+                              UserSession session) {
       super(rootSchema, caseSensitive, defaultSchema, typeFactory);
       this.drillConfig = drillConfig;
       this.session = session;
       this.allowTemporaryTables = true;
     }
 
-    /** Disallow temporary tables presence in sql statement (ex: in view definitions) */
+    /**
+     * Disallow temporary tables presence in sql statement (ex: in view definitions)
+     */
     public void disallowTemporaryTables() {
       this.allowTemporaryTables = false;
     }
 
     /**
      * If schema is not indicated (only one element in the list) or schema is default temporary workspace,
-     * we need to check among session temporary tables first in default temporary workspace.
+     * we need to check among session temporary tables in default temporary workspace first.
      * If temporary table is found and temporary tables usage is allowed, its table instance will be returned,
      * otherwise search will be conducted in original workspace.
      *
@@ -508,8 +464,8 @@ public class SqlConverter {
     @Override
     public RelOptTableImpl getTable(final List<String> names) {
       RelOptTableImpl temporaryTable = null;
-      String schemaPath = SchemaUtilites.getSchemaPath(names.subList(0, names.size() - 1));
-      if (names.size() == 1 || SchemaUtilites.isTemporaryWorkspace(schemaPath, drillConfig)) {
+
+      if (mightBeTemporaryTable(names, session.getDefaultSchemaPath(), drillConfig)) {
         String temporaryTableName = session.resolveTemporaryTableName(names.get(names.size() - 1));
         if (temporaryTableName != null) {
           List<String> temporaryNames = Lists.newArrayList(temporarySchema, temporaryTableName);
@@ -526,6 +482,32 @@ public class SqlConverter {
             .build(logger);
       }
       return super.getTable(names);
+    }
+
+    /**
+     * We should check if passed table is temporary or not if:
+     * <li>schema is not indicated (only one element in the names list)<li/>
+     * <li>current schema or indicated schema is default temporary workspace<li/>
+     *
+     * Examples (where dfs.tmp is default temporary workspace):
+     * <li>select * from t<li/>
+     * <li>select * from dfs.tmp.t<li/>
+     * <li>use dfs; select * from tmp.t<li/>
+     *
+     * @param names             list of schema and table names, table name is always the last element
+     * @param defaultSchemaPath current schema path set using USE command
+     * @param drillConfig       drill config
+     * @return true if check for temporary table should be done, false otherwise
+     */
+    private boolean mightBeTemporaryTable(List<String> names, String defaultSchemaPath, DrillConfig drillConfig) {
+      if (names.size() == 1) {
+        return true;
+      }
+
+      String schemaPath = SchemaUtilites.getSchemaPath(names.subList(0, names.size() - 1));
+      return SchemaUtilites.isTemporaryWorkspace(schemaPath, drillConfig) ||
+          SchemaUtilites.isTemporaryWorkspace(
+              SchemaUtilites.SCHEMA_PATH_JOINER.join(defaultSchemaPath, schemaPath), drillConfig);
     }
   }
 }

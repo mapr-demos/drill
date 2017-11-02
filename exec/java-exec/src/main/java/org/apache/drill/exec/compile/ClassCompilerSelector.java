@@ -25,7 +25,8 @@ import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.exec.compile.ClassTransformer.ClassNames;
 import org.apache.drill.exec.exception.ClassTransformationException;
-import org.apache.drill.exec.server.options.OptionManager;
+import org.apache.drill.exec.server.options.OptionMetaData;
+import org.apache.drill.exec.server.options.OptionSet;
 import org.apache.drill.exec.server.options.OptionValidator;
 import org.apache.drill.exec.server.options.OptionValue;
 import org.apache.drill.exec.server.options.TypeValidators.BooleanValidator;
@@ -75,15 +76,15 @@ public class ClassCompilerSelector {
 
   public static final String JAVA_COMPILER_OPTION = "exec.java_compiler";
   public static final String JAVA_COMPILER_JANINO_MAXSIZE_OPTION = "exec.java_compiler_janino_maxsize";
-  public static final OptionValidator JAVA_COMPILER_JANINO_MAXSIZE = new LongValidator(JAVA_COMPILER_JANINO_MAXSIZE_OPTION, 256*1024);
+  public static final OptionValidator JAVA_COMPILER_JANINO_MAXSIZE = new LongValidator(JAVA_COMPILER_JANINO_MAXSIZE_OPTION);
 
   public static final String JAVA_COMPILER_DEBUG_OPTION = "exec.java_compiler_debug";
-  public static final OptionValidator JAVA_COMPILER_DEBUG = new BooleanValidator(JAVA_COMPILER_DEBUG_OPTION, true);
+  public static final OptionValidator JAVA_COMPILER_DEBUG = new BooleanValidator(JAVA_COMPILER_DEBUG_OPTION);
 
-  public static final StringValidator JAVA_COMPILER_VALIDATOR = new StringValidator(JAVA_COMPILER_OPTION, CompilerPolicy.DEFAULT.toString()) {
+  public static final StringValidator JAVA_COMPILER_VALIDATOR = new StringValidator(JAVA_COMPILER_OPTION) {
     @Override
-    public void validate(final OptionValue v, final OptionManager manager) {
-      super.validate(v, manager);
+    public void validate(final OptionValue v, final OptionMetaData metaData, final OptionSet manager) {
+      super.validate(v, metaData, manager);
       try {
         CompilerPolicy.valueOf(v.string_val.toUpperCase());
       } catch (IllegalArgumentException e) {
@@ -101,7 +102,7 @@ public class ClassCompilerSelector {
   private final AbstractClassCompiler jdkClassCompiler;
   private final AbstractClassCompiler janinoClassCompiler;
 
-  public ClassCompilerSelector(ClassLoader classLoader, DrillConfig config, OptionManager sessionOptions) {
+  public ClassCompilerSelector(ClassLoader classLoader, DrillConfig config, OptionSet sessionOptions) {
     OptionValue value = sessionOptions.getOption(JAVA_COMPILER_OPTION);
     policy = CompilerPolicy.valueOf((value != null) ? value.string_val.toUpperCase() : config.getString(JAVA_COMPILER_CONFIG).toUpperCase());
 

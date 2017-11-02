@@ -19,25 +19,32 @@ package org.apache.drill.test;
 
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.net.URL;
+import java.sql.Connection;
+import java.sql.DriverManager;
+import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.Map.Entry;
 import java.util.Properties;
 
 import org.apache.commons.io.FileUtils;
+import org.apache.drill.BaseTestQuery;
 import org.apache.drill.DrillTestWrapper.TestServices;
 import org.apache.drill.QueryTestUtil;
-import org.apache.drill.common.config.DrillConfig;
+import org.apache.drill.TestBuilder;
+import org.apache.drill.common.config.DrillProperties;
 import org.apache.drill.common.exceptions.ExecutionSetupException;
+import org.apache.drill.common.logical.FormatPluginConfig;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.ZookeeperHelper;
 import org.apache.drill.exec.client.DrillClient;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.memory.RootAllocatorFactory;
+import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.proto.UserBitShared.QueryType;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
 import org.apache.drill.exec.server.Drillbit;
@@ -49,11 +56,11 @@ import org.apache.drill.exec.store.dfs.FileSystemPlugin;
 import org.apache.drill.exec.store.dfs.WorkspaceConfig;
 import org.apache.drill.exec.store.mock.MockStorageEngine;
 import org.apache.drill.exec.store.mock.MockStorageEngineConfig;
+import org.apache.drill.exec.store.sys.store.provider.ZookeeperPersistentStoreProvider;
 import org.apache.drill.exec.util.TestUtilities;
 
 import com.google.common.base.Charsets;
 import com.google.common.base.Preconditions;
-import com.google.common.io.Files;
 import com.google.common.io.Resources;
 
 /**
@@ -63,8 +70,9 @@ import com.google.common.io.Resources;
  * creates the requested Drillbit and client.
  */
 
-public class ClusterFixture implements AutoCloseable {
-//  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(ClientFixture.class);
+public class ClusterFixture extends BaseFixture implements AutoCloseable {
+  // private static final org.slf4j.Logger logger =
+  // org.slf4j.LoggerFactory.getLogger(ClientFixture.class);
   public static final String ENABLE_FULL_CACHE = "drill.exec.test.use-full-cache";
   public static final int MAX_WIDTH_PER_NODE = 2;
 
@@ -75,6 +83,14 @@ public class ClusterFixture implements AutoCloseable {
       // configuration. They allow tests to run successfully in Eclipse.
 
       put(ExecConstants.SYS_STORE_PROVIDER_LOCAL_ENABLE_WRITE, false);
+
+      // The CTTAS function requires that the default temporary workspace be
+      // writable. By default, the default temporary workspace points to
+      // dfs.tmp. But, the test setup marks dfs.tmp as read-only. To work
+      // around this, tests are supposed to use dfs_test. So, we need to
+      // set the default temporary workspace to dfs_test.tmp.
+
+      put(ExecConstants.DEFAULT_TEMPORARY_WORKSPACE, BaseTestQuery.TEMP_SCHEMA);
       put(ExecConstants.HTTP_ENABLE, false);
       put(QueryTestUtil.TEST_QUERY_PRINTING_SILENT, true);
       put("drill.catastrophic_to_standard_out", true);
@@ -99,81 +115,162 @@ public class ClusterFixture implements AutoCloseable {
       // behavior. Production default is DEFAULT_SCAN_THREADS
 
       put(ExecConstants.SCAN_THREADPOOL_SIZE, 4);
+
+      // Define a useful root location for the ZK persistent
+      // storage. Profiles will go here when running in distributed
+      // mode.
+
+      put(ZookeeperPersistentStoreProvider.DRILL_EXEC_SYS_STORE_PROVIDER_ZK_BLOBROOT, "/tmp/drill/tests");
+      put(ExecConstants.SYS_STORE_PROVIDER_LOCAL_PATH, "file:/tmp/drill/tests");
     }
   };
 
   public static final String DEFAULT_BIT_NAME = "drillbit";
 
-  private DrillConfig config;
-  private Map<String,Drillbit> bits = new HashMap<>();
+  private Map<String, Drillbit> bits = new HashMap<>();
   private Drillbit defaultDrillbit;
-  private BufferAllocator allocator;
   private boolean ownsZK;
   private ZookeeperHelper zkHelper;
   private RemoteServiceSet serviceSet;
-  private String dfsTestTmpSchemaLocation;
+  private File dfsTestTempDir;
   protected List<ClientFixture> clients = new ArrayList<>();
+  protected RestClientFixture restClientFixture;
+  private boolean usesZk;
+  private boolean preserveLocalFiles;
+  private boolean isLocal;
+  private Properties clientProps;
 
-  protected ClusterFixture(FixtureBuilder  builder) throws Exception {
+  /**
+   * Temporary directories created for this test cluster.
+   * Each is removed when closing the cluster.
+   */
+
+  private List<File> tempDirs = new ArrayList<>();
+
+  ClusterFixture(FixtureBuilder builder) {
+
+    setClientProps(builder);
+    configureZk(builder);
+    try {
+      createConfig(builder);
+      allocator = RootAllocatorFactory.newRoot(config);
+      startDrillbits(builder);
+      applyOptions(builder);
+    } catch (Exception e) {
+      // Translate exceptions to unchecked to avoid cluttering
+      // tests. Failures will simply fail the test itself.
+
+      throw new IllegalStateException( "Cluster fixture setup failed", e );
+    }
+  }
+
+  /**
+   * Set the client properties to be used by client fixture.
+   * @param builder {@link FixtureBuilder#clientProps}
+   */
+  private void setClientProps(FixtureBuilder builder) {
+      clientProps = builder.clientProps;
+  }
+
+  public Properties getClientProps() {
+    return clientProps;
+  }
+
+  private void configureZk(FixtureBuilder builder) {
 
     // Start ZK if requested.
 
+    String zkConnect = null;
     if (builder.zkHelper != null) {
+      // Case where the test itself started ZK and we're only using it.
+
       zkHelper = builder.zkHelper;
       ownsZK = false;
-    } else if (builder.zkCount > 0) {
-      zkHelper = new ZookeeperHelper(true);
-      zkHelper.startZookeeper(builder.zkCount);
+    } else if (builder.localZkCount > 0) {
+      // Case where we need a local ZK just for this test cluster.
+
+      zkHelper = new ZookeeperHelper();
+      zkHelper.startZookeeper(builder.localZkCount);
       ownsZK = true;
     }
+    if (zkHelper != null) {
+      zkConnect = zkHelper.getConnectionString();
+
+      // When using ZK, we need to pass in the connection property as
+      // a config property. But, we can only do that if we are passing
+      // in config properties defined at run time. Drill does not allow
+      // combining locally-set properties and a config file: it is one
+      // or the other.
+
+      if (builder.configBuilder().hasResource()) {
+        throw new IllegalArgumentException("Cannot specify a local ZK while using an external config file.");
+      }
+      builder.configProperty(ExecConstants.ZK_CONNECTION, zkConnect);
+
+      // Forced to disable this, because currently we leak memory which is a known issue for query cancellations.
+      // Setting this causes unit tests to fail.
+      builder.configProperty(ExecConstants.RETURN_ERROR_FOR_FAILURE_IN_CANCELLED_FRAGMENTS, true);
+    }
+  }
+
+  private void createConfig(FixtureBuilder builder) throws Exception {
 
     // Create a config
     // Because of the way DrillConfig works, we can set the ZK
     // connection string only if a property set is provided.
 
-    if (builder.configResource != null) {
-      config = DrillConfig.create(builder.configResource);
-    } else if (builder.configProps != null) {
-      config = DrillConfig.create(configProperties(builder.configProps));
-    } else {
-      config = DrillConfig.create(configProperties(TEST_CONFIGURATIONS));
-    }
+    config = builder.configBuilder.build();
 
-    // Not quite sure what this is, but some tests seem to use it.
+    if (builder.usingZk) {
+      // Distribute drillbit using ZK (in-process or external)
 
-    if (builder.enableFullCache ||
-        (config.hasPath(ENABLE_FULL_CACHE) && config.getBoolean(ENABLE_FULL_CACHE))) {
-      serviceSet = RemoteServiceSet.getServiceSetWithFullCache(config, allocator);
+      serviceSet = null;
+      usesZk = true;
+      isLocal = false;
     } else {
+      // Embedded Drillbit.
+
       serviceSet = RemoteServiceSet.getLocalServiceSet();
+      isLocal = true;
     }
+  }
 
-    dfsTestTmpSchemaLocation = TestUtilities.createTempDir();
+  private void startDrillbits(FixtureBuilder builder) throws Exception {
+//    // Ensure that Drill uses the log directory determined here rather than
+//    // it's hard-coded defaults. WIP: seems to be needed some times but
+//    // not others.
+//
+//    String logDir = null;
+//    if (builder.tempDir != null) {
+//      logDir = builder.tempDir.getAbsolutePath();
+//    }
+//    if (logDir == null) {
+//      logDir = config.getString(ExecConstants.DRILL_TMP_DIR);
+//      if (logDir != null) {
+//        logDir += "/drill/log";
+//      }
+//    }
+//    if (logDir == null) {
+//      logDir = "/tmp/drill";
+//    }
+//    new File(logDir).mkdirs();
+//    System.setProperty("drill.log-dir", logDir);
+
+    dfsTestTempDir = makeTempDir("dfs-test");
+
+    // Clean up any files that may have been left from the
+    // last run.
+
+    preserveLocalFiles = builder.preserveLocalFiles;
+    removeLocalFiles();
+
+    // Start the Drillbits.
 
     Preconditions.checkArgument(builder.bitCount > 0);
     int bitCount = builder.bitCount;
     for (int i = 0; i < bitCount; i++) {
-      @SuppressWarnings("resource")
-      Drillbit bit = new Drillbit(config, serviceSet);
+      Drillbit bit = new Drillbit(config, builder.configBuilder.getDefinitions(), serviceSet);
       bit.run();
-
-      // Create the dfs_test name space
-
-      @SuppressWarnings("resource")
-      final StoragePluginRegistry pluginRegistry = bit.getContext().getStorage();
-      TestUtilities.updateDfsTestTmpSchemaLocation(pluginRegistry, dfsTestTmpSchemaLocation);
-      TestUtilities.makeDfsTmpSchemaImmutable(pluginRegistry);
-
-      // Create the mock data plugin
-      // (Disabled until DRILL-5152 is committed.)
-
-      MockStorageEngineConfig config = MockStorageEngineConfig.INSTANCE;
-      @SuppressWarnings("resource")
-      MockStorageEngine plugin = new MockStorageEngine(
-          MockStorageEngineConfig.INSTANCE, bit.getContext(),
-          MockStorageEngineConfig.NAME);
-      ((StoragePluginRegistryImpl) pluginRegistry)
-          .definePlugin(MockStorageEngineConfig.NAME, config, plugin);
 
       // Bit name and registration.
 
@@ -189,7 +286,7 @@ public class ClusterFixture implements AutoCloseable {
         if (bitCount == 1) {
           name = DEFAULT_BIT_NAME;
         } else {
-          name = DEFAULT_BIT_NAME + Integer.toString(i+1);
+          name = DEFAULT_BIT_NAME + Integer.toString(i + 1);
         }
       }
       bits.put(name, bit);
@@ -200,11 +297,29 @@ public class ClusterFixture implements AutoCloseable {
       if (i == 0) {
         defaultDrillbit = bit;
       }
+      configureStoragePlugins(bit);
     }
+  }
 
-    // Some operations need an allocator.
+  private void configureStoragePlugins(Drillbit bit) throws Exception {
+    // Create the dfs_test name space
 
-    allocator = RootAllocatorFactory.newRoot(config);
+    @SuppressWarnings("resource")
+    final StoragePluginRegistry pluginRegistry = bit.getContext().getStorage();
+    TestUtilities.updateDfsTestTmpSchemaLocation(pluginRegistry, dfsTestTempDir.getAbsolutePath());
+    TestUtilities.makeDfsTmpSchemaImmutable(pluginRegistry);
+
+    // Create the mock data plugin
+
+    MockStorageEngineConfig config = MockStorageEngineConfig.INSTANCE;
+    @SuppressWarnings("resource")
+    MockStorageEngine plugin = new MockStorageEngine(
+        MockStorageEngineConfig.INSTANCE, bit.getContext(),
+        MockStorageEngineConfig.NAME);
+    ((StoragePluginRegistryImpl) pluginRegistry).definePlugin(MockStorageEngineConfig.NAME, config, plugin);
+  }
+
+  private void applyOptions(FixtureBuilder builder) throws Exception {
 
     // Apply system options
 
@@ -223,33 +338,35 @@ public class ClusterFixture implements AutoCloseable {
     }
   }
 
-  private Properties configProperties(Properties configProps) {
-    Properties effectiveProps = new Properties();
-    for (Entry<Object, Object> entry : configProps.entrySet()) {
-      effectiveProps.put(entry.getKey(), entry.getValue().toString());
-    }
-    if (zkHelper != null) {
-      effectiveProps.put(ExecConstants.ZK_CONNECTION, zkHelper.getConfig().getString(ExecConstants.ZK_CONNECTION));
-    }
-    return effectiveProps;
-  }
-
   public Drillbit drillbit() { return defaultDrillbit; }
   public Drillbit drillbit(String name) { return bits.get(name); }
   public Collection<Drillbit> drillbits() { return bits.values(); }
   public RemoteServiceSet serviceSet() { return serviceSet; }
-  public BufferAllocator allocator() { return allocator; }
-  public DrillConfig config() { return config; }
+  public File getDfsTestTmpDir() { return dfsTestTempDir; }
 
   public ClientFixture.ClientBuilder clientBuilder() {
     return new ClientFixture.ClientBuilder(this);
   }
 
+  public RestClientFixture.Builder restClientBuilder() {
+    return new RestClientFixture.Builder(this);
+  }
+
   public ClientFixture clientFixture() {
     if (clients.isEmpty()) {
-      clientBuilder().build();
+      clientBuilder()
+        .property(DrillProperties.DRILLBIT_CONNECTION, String.format("localhost:%s", drillbit().getUserPort()))
+        .build();
     }
     return clients.get(0);
+  }
+
+  public RestClientFixture restClientFixture() {
+    if (restClientFixture == null) {
+      restClientFixture = restClientBuilder().build();
+    }
+
+    return restClientFixture;
   }
 
   public DrillClient client() {
@@ -257,7 +374,40 @@ public class ClusterFixture implements AutoCloseable {
   }
 
   /**
-   * Close the clients, drillbits, allocator and
+   * Return a JDBC connection to the default (first) Drillbit.
+   * Note that this code requires special setup of the test code.
+   * Tests in the "exec" package do not normally have visibility
+   * to the Drill JDBC driver. So, the test must put that code
+   * on the class path manually in order for this code to load the
+   * JDBC classes. The caller is responsible for closing the JDBC
+   * connection before closing the cluster. (An enhancement is to
+   * do the close automatically as is done for clients.)
+   *
+   * @return a JDBC connection to the default Drillbit
+   */
+
+  public Connection jdbcConnection() {
+    try {
+      Class.forName("org.apache.drill.jdbc.Driver");
+    } catch (ClassNotFoundException e) {
+      throw new IllegalStateException(e);
+    }
+    String connStr = "jdbc:drill:";
+    if (usesZK()) {
+      connStr += "zk=" + zkHelper.getConnectionString();
+    } else {
+      DrillbitEndpoint ep = drillbit().getContext().getEndpoint();
+      connStr += "drillbit=" + ep.getAddress() + ":" + ep.getUserPort();
+    }
+    try {
+      return DriverManager.getConnection(connStr);
+    } catch (SQLException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  /**
+   * Close the clients, Drillbits, allocator and
    * Zookeeper. Checks for exceptions. If an exception occurs,
    * continues closing, suppresses subsequent exceptions, and
    * throws the first exception at completion of close. This allows
@@ -292,11 +442,86 @@ public class ClusterFixture implements AutoCloseable {
       }
     }
     zkHelper = null;
+
+    // Delete any local files, if we wrote to the local
+    // persistent store. But, leave the files if the user wants
+    // to review them, for debugging, say. Note that, even if the
+    // files are preserved here, they will be removed when the
+    // next cluster fixture starts, else the CTTAS initialization
+    // will fail.
+
+    if (! preserveLocalFiles) {
+      try {
+        removeLocalFiles();
+      } catch (Exception e) {
+        ex = ex == null ? e : ex;
+      }
+    }
+
+    // Remove temporary directories created for this cluster session.
+
+    try {
+      removeTempDirs();
+    } catch (Exception e) {
+      ex = ex == null ? e : ex;
+    }
     if (ex != null) {
       throw ex;
     }
   }
 
+  /**
+   * Removes files stored locally in the "local store provider."
+   * Required because CTTAS setup fails if these files are left from one
+   * run to the next.
+   *
+   * @throws IOException if a directory cannot be deleted
+   */
+
+  private void removeLocalFiles() throws IOException {
+
+    // Don't delete if this is not a local Drillbit.
+
+    if (! isLocal) {
+      return;
+    }
+
+    // Remove the local files if they exist.
+
+    String localStoreLocation = config.getString(ExecConstants.SYS_STORE_PROVIDER_LOCAL_PATH);
+    removeDir(new File(localStoreLocation));
+  }
+
+  private void removeTempDirs() throws IOException {
+    IOException ex = null;
+    for (File dir : tempDirs) {
+      try {
+        removeDir(dir);
+      } catch (IOException e) {
+        ex = ex == null ? e : ex;
+      }
+    }
+    if (ex != null) {
+      throw ex;
+    }
+  }
+
+  public void removeDir(File dir) throws IOException {
+    if (dir.exists()) {
+      FileUtils.deleteDirectory(dir);
+    }
+  }
+
+  /**
+   * Close a resource, suppressing the exception, and keeping
+   * only the first exception that may occur. We assume that only
+   * the first is useful, any others are probably down-stream effects
+   * of that first one.
+   *
+   * @param item Item to be closed
+   * @param ex exception to be returned if none thrown here
+   * @return the first exception found
+   */
   private Exception safeClose(AutoCloseable item, Exception ex) {
     try {
       if (item != null) {
@@ -308,15 +533,37 @@ public class ClusterFixture implements AutoCloseable {
     return ex;
   }
 
+  /**
+   * Define a workspace within an existing storage plugin. Useful for
+   * pointing to local file system files outside the Drill source tree.
+   *
+   * @param pluginName name of the plugin like "dfs" or "dfs_test".
+   * @param schemaName name of the new schema
+   * @param path directory location (usually local)
+   * @param defaultFormat default format for files in the schema
+   */
+
   public void defineWorkspace(String pluginName, String schemaName, String path,
-      String defaultFormat) throws ExecutionSetupException {
+      String defaultFormat) {
+    defineWorkspace(pluginName, schemaName, path, defaultFormat, null);
+  }
+
+  public void defineWorkspace(String pluginName, String schemaName, String path,
+      String defaultFormat, FormatPluginConfig format) {
     for (Drillbit bit : drillbits()) {
-      defineWorkspace(bit, pluginName, schemaName, path, defaultFormat);
+      try {
+        defineWorkspace(bit, pluginName, schemaName, path, defaultFormat, format);
+      } catch (ExecutionSetupException e) {
+        // This functionality is supposed to work in tests. Change
+        // exception to unchecked to make test code simpler.
+
+        throw new IllegalStateException(e);
+      }
     }
   }
 
   public static void defineWorkspace(Drillbit drillbit, String pluginName,
-      String schemaName, String path, String defaultFormat)
+      String schemaName, String path, String defaultFormat, FormatPluginConfig format)
       throws ExecutionSetupException {
     @SuppressWarnings("resource")
     final StoragePluginRegistry pluginRegistry = drillbit.getContext().getStorage();
@@ -327,6 +574,9 @@ public class ClusterFixture implements AutoCloseable {
 
     pluginConfig.workspaces.remove(schemaName);
     pluginConfig.workspaces.put(schemaName, newTmpWSConfig);
+    if (format != null) {
+      pluginConfig.formats.put(defaultFormat, format);
+    }
 
     pluginRegistry.createOrUpdate(pluginName, pluginConfig, true);
   }
@@ -335,15 +585,33 @@ public class ClusterFixture implements AutoCloseable {
   public static final String EXPLAIN_PLAN_JSON = "json";
 
   public static FixtureBuilder builder() {
-     return new FixtureBuilder()
-         .configProps(FixtureBuilder.defaultProps())
-         .sessionOption(ExecConstants.MAX_WIDTH_PER_NODE_KEY, MAX_WIDTH_PER_NODE)
-         ;
+    FixtureBuilder builder = new FixtureBuilder()
+         .sessionOption(ExecConstants.MAX_WIDTH_PER_NODE_KEY, MAX_WIDTH_PER_NODE);
+    Properties props = new Properties();
+    props.putAll(ClusterFixture.TEST_CONFIGURATIONS);
+    builder.configBuilder.configProps(props);
+    return builder;
   }
+
+  /**
+   * Return a cluster builder without any of the usual defaults. Use
+   * this only for special cases. Your code is responsible for all the
+   * odd bits that must be set to get the setup right. See
+   * {@link ClusterFixture#TEST_CONFIGURATIONS} for details. Note that
+   * you are often better off using the defaults, then replacing selected
+   * properties with the values you prefer.
+   *
+   * @return a fixture builder with no default properties set
+   */
 
   public static FixtureBuilder bareBuilder() {
     return new FixtureBuilder();
   }
+
+  /**
+   * Shim class to allow the {@link TestBuilder} class to work with the
+   * cluster fixture.
+   */
 
   public static class FixtureTestServices implements TestServices {
 
@@ -370,11 +638,27 @@ public class ClusterFixture implements AutoCloseable {
     }
   }
 
-  public static ClusterFixture standardCluster() throws Exception {
+  /**
+   * Return a cluster fixture built with standard options. This is a short-cut
+   * for simple tests that don't need special setup.
+   *
+   * @return a cluster fixture with standard options
+   * @throws Exception if something goes wrong
+   */
+  public static ClusterFixture standardCluster() {
     return builder().build();
   }
 
-  static String stringify(Object value) {
+  /**
+   * Convert a Java object (typically a boxed scalar) to a string
+   * for use in SQL. Quotes strings but just converts others to
+   * string format.
+   *
+   * @param value the value to encode
+   * @return the SQL-acceptable string equivalent
+   */
+
+  public static String stringify(Object value) {
     if (value instanceof String) {
       return "'" + (String) value + "'";
     } else {
@@ -387,10 +671,21 @@ public class ClusterFixture implements AutoCloseable {
 
     final URL url = Resources.getResource(trimSlash(resource));
     if (url == null) {
-      throw new IOException(String.format("Unable to find resource %s.", resource));
+      throw new IOException(
+          String.format("Unable to find resource %s.", resource));
     }
     return Resources.toString(url, Charsets.UTF_8);
   }
+
+  /**
+   * Load a resource file, returning the resource as a string.
+   * "Hides" the checked exception as unchecked, which is fine
+   * in a test as the unchecked exception will fail the test
+   * without unnecessary error fiddling.
+   *
+   * @param resource path to the resource
+   * @return the resource contents as a string
+   */
 
   public static String loadResource(String resource) {
     try {
@@ -400,7 +695,15 @@ public class ClusterFixture implements AutoCloseable {
     }
   }
 
-  static String trimSlash(String path) {
+  /**
+   * Guava likes paths to resources without an initial slash, the JDK
+   * needs a slash. Normalize the path when needed.
+   *
+   * @param path resource path with optional leading slash
+   * @return same path without the leading slash
+   */
+
+  public static String trimSlash(String path) {
     if (path == null) {
       return path;
     } else if (path.startsWith("/")) {
@@ -411,22 +714,60 @@ public class ClusterFixture implements AutoCloseable {
   }
 
   /**
-   * Create a temp directory to store the given <i>dirName</i>.
-   * Directory will be deleted on exit. Directory is created if it does
-   * not exist.
-   * @param dirName directory name
-   * @return Full path including temp parent directory and given directory name.
+   * Create a temporary directory which will be removed when the
+   * cluster closes.
+   *
+   * @param dirName the name of the leaf directory
+   * @return the path to the temporary directory which is usually
+   * under the temporary directory structure for this machine
    */
-  public static File getTempDir(final String dirName) {
-    final File dir = Files.createTempDir();
-    Runtime.getRuntime().addShutdownHook(new Thread() {
-      @Override
-      public void run() {
-        FileUtils.deleteQuietly(dir);
-      }
-    });
-    File tempDir = new File(dir, dirName);
-    tempDir.mkdirs();
-    return tempDir;
+
+  public File makeTempDir(final String dirName) {
+    File dir = getTempDir(dirName);
+    tempDirs.add(dir);
+    return dir;
+  }
+
+  /**
+   * Create a temporary data directory which will be removed when the
+   * cluster closes, and register it as a "dfs" name space.
+   *
+   * @param key the name to use for the directory and the name space.
+   * Access the directory as "dfs.<key>".
+   * @param defaultFormat default storage format for the workspace
+   * @return location of the directory which can be used to create
+   * temporary input files
+   */
+
+  public File makeDataDir(String key, String defaultFormat) {
+    File dir = makeTempDir(key);
+    defineWorkspace("dfs", key, dir.getAbsolutePath(), defaultFormat);
+    return dir;
+  }
+
+  public File getDrillTempDir() {
+    return new File(URI.create(config.getString(ExecConstants.SYS_STORE_PROVIDER_LOCAL_PATH)).getPath());
+  }
+
+  public boolean usesZK() {
+    return usesZk;
+  }
+
+  /**
+   * Returns the directory that holds query profiles. Valid only for an
+   * embedded Drillbit with local cluster coordinator &ndash; the normal
+   * case for unit tests.
+   *
+   * @return query profile directory
+   */
+
+  public File getProfileDir() {
+    File baseDir;
+    if (usesZk) {
+      baseDir = new File(config.getString(ZookeeperPersistentStoreProvider.DRILL_EXEC_SYS_STORE_PROVIDER_ZK_BLOBROOT));
+    } else {
+      baseDir = getDrillTempDir();
+    }
+    return new File(baseDir, "profiles");
   }
 }

@@ -23,6 +23,8 @@ import static org.junit.Assert.assertTrue;
 import java.util.Iterator;
 import java.util.List;
 
+import org.apache.drill.categories.OperatorTest;
+import org.apache.drill.categories.SlowTest;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.util.FileUtils;
 import org.apache.drill.common.util.TestTools;
@@ -40,13 +42,14 @@ import org.apache.drill.exec.proto.BitControl.PlanFragment;
 import org.apache.drill.exec.record.RecordBatchLoader;
 import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
-import org.apache.drill.exec.rpc.user.UserServer;
+import org.apache.drill.exec.rpc.UserClientConnection;
 import org.apache.drill.exec.server.Drillbit;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.vector.ValueVector;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TestRule;
 
 import com.google.common.base.Charsets;
@@ -54,7 +57,7 @@ import com.google.common.io.Files;
 
 import mockit.Injectable;
 
-
+@Category({SlowTest.class, OperatorTest.class})
 public class TestHashJoin extends PopUnitTestBase {
   //private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestMergeJoin.class);
 
@@ -62,7 +65,7 @@ public class TestHashJoin extends PopUnitTestBase {
 
   private final DrillConfig c = DrillConfig.create();
 
-  private void testHJMockScanCommon(final DrillbitContext bitContext, UserServer.UserClientConnection connection, String physicalPlan, int expectedRows) throws Throwable {
+  private void testHJMockScanCommon(final DrillbitContext bitContext, UserClientConnection connection, String physicalPlan, int expectedRows) throws Throwable {
 
     mockDrillbitContext(bitContext);
 
@@ -87,21 +90,21 @@ public class TestHashJoin extends PopUnitTestBase {
 
   @Test
   public void multiBatchEqualityJoin(@Injectable final DrillbitContext bitContext,
-                                 @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                 @Injectable UserClientConnection connection) throws Throwable {
 
     testHJMockScanCommon(bitContext, connection, "/join/hash_join_multi_batch.json", 200000);
   }
 
   @Test
   public void multiBatchRightOuterJoin(@Injectable final DrillbitContext bitContext,
-                                       @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                       @Injectable UserClientConnection connection) throws Throwable {
 
     testHJMockScanCommon(bitContext, connection, "/join/hj_right_outer_multi_batch.json", 100000);
   }
 
   @Test
   public void multiBatchLeftOuterJoin(@Injectable final DrillbitContext bitContext,
-                                      @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                      @Injectable UserClientConnection connection) throws Throwable {
 
     testHJMockScanCommon(bitContext, connection, "/join/hj_left_outer_multi_batch.json", 100000);
   }
@@ -149,7 +152,7 @@ public class TestHashJoin extends PopUnitTestBase {
 
   @Test
   public void hjWithExchange(@Injectable final DrillbitContext bitContext,
-                             @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                             @Injectable UserClientConnection connection) throws Throwable {
 
     // Function tests with hash join with exchanges
     try (final RemoteServiceSet serviceSet = RemoteServiceSet.getLocalServiceSet();
@@ -177,7 +180,7 @@ public class TestHashJoin extends PopUnitTestBase {
 
   @Test
   public void multipleConditionJoin(@Injectable final DrillbitContext bitContext,
-                                    @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                    @Injectable UserClientConnection connection) throws Throwable {
 
     // Function tests hash join with multiple join conditions
     try (final RemoteServiceSet serviceSet = RemoteServiceSet.getLocalServiceSet();
@@ -223,7 +226,7 @@ public class TestHashJoin extends PopUnitTestBase {
 
   @Test
   public void hjWithExchange1(@Injectable final DrillbitContext bitContext,
-                              @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                              @Injectable UserClientConnection connection) throws Throwable {
 
     // Another test for hash join with exchanges
     try (final RemoteServiceSet serviceSet = RemoteServiceSet.getLocalServiceSet();

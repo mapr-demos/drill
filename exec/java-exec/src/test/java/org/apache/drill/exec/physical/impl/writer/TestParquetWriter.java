@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -18,6 +18,7 @@
 package org.apache.drill.exec.physical.impl.writer;
 
 import static org.apache.drill.exec.store.parquet.ParquetRecordWriter.DRILL_VERSION_PROPERTY;
+import static org.apache.drill.TestBuilder.convertToLocalTimestamp;
 import static org.apache.parquet.format.converter.ParquetMetadataConverter.SKIP_ROW_GROUPS;
 import static org.junit.Assert.assertEquals;
 
@@ -25,7 +26,6 @@ import java.io.File;
 import java.io.FileWriter;
 import java.math.BigDecimal;
 import java.sql.Date;
-import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -35,18 +35,20 @@ import java.util.Map;
 
 import com.google.common.base.Joiner;
 import org.apache.drill.BaseTestQuery;
+import org.apache.drill.categories.ParquetTest;
+import org.apache.drill.categories.SlowTest;
+import org.apache.drill.categories.UnlikelyTest;
 import org.apache.drill.common.types.TypeProtos;
 import org.apache.drill.common.util.DrillVersionInfo;
 import org.apache.drill.common.util.TestTools;
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.fn.interp.TestConstantFolding;
 import org.apache.drill.exec.planner.physical.PlannerSettings;
+import org.apache.drill.test.OperatorFixture;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.FileStatus;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
-import org.apache.log4j.Level;
-import org.apache.parquet.Log;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.joda.time.DateTime;
@@ -56,12 +58,13 @@ import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 import org.junit.rules.TemporaryFolder;
-import org.junit.rules.Timeout;
 import org.junit.runner.RunWith;
 import org.junit.runners.Parameterized;
 
 @RunWith(Parameterized.class)
+@Category({SlowTest.class, ParquetTest.class})
 public class TestParquetWriter extends BaseTestQuery {
 //  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestParquetWriter.class);
 
@@ -122,10 +125,7 @@ public class TestParquetWriter extends BaseTestQuery {
 
   @BeforeClass
   public static void initFs() throws Exception {
-    Configuration conf = new Configuration();
-    conf.set(FileSystem.FS_DEFAULT_NAME_KEY, "local");
-
-    fs = FileSystem.get(conf);
+    fs = getLocalFileSystem();
     test(String.format("alter session set `%s` = true", PlannerSettings.ENABLE_DECIMAL_DATA_TYPE_KEY));
   }
 
@@ -270,7 +270,9 @@ public class TestParquetWriter extends BaseTestQuery {
       String inputTable = "cp.`tpch/lineitem.parquet`";
       runTestAndValidate(selection, validationSelection, inputTable, "lineitem_parquet_converted");
     } finally {
-      test("alter session set `%s` = %b", ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING, ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING_VALIDATOR.getDefault().bool_val);
+      OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
+      test("alter session set `%s` = %b", ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING,
+        optionSet.getDefault(ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING).bool_val);
     }
   }
 
@@ -324,8 +326,11 @@ public class TestParquetWriter extends BaseTestQuery {
       String inputTable = "cp.`tpch/supplier.parquet`";
       runTestAndValidate("*", "*", inputTable, "supplier_parquet_no_dict_uncompressed");
     } finally {
-      test(String.format("alter session set `%s` = %b", ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING, ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING_VALIDATOR.getDefault().bool_val));
-      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE, ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE_VALIDATOR.getDefault().string_val));
+      final OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
+      test(String.format("alter session set `%s` = %b", ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING,
+        optionSet.getDefault(ExecConstants.PARQUET_WRITER_ENABLE_DICTIONARY_ENCODING).bool_val));
+      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE,
+        optionSet.getDefault(ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE).string_val));
     }
   }
 
@@ -336,7 +341,9 @@ public class TestParquetWriter extends BaseTestQuery {
       String inputTable = "cp.`tpch/supplier.parquet`";
       runTestAndValidate("*", "*", inputTable, "supplier_parquet_dict_gzip");
     } finally {
-      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE, ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE_VALIDATOR.getDefault().string_val));
+      final OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
+      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE,
+        optionSet.getDefault(ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE).string_val));
     }
   }
 
@@ -458,8 +465,9 @@ public class TestParquetWriter extends BaseTestQuery {
         .optionSettingQueriesForBaseline("alter system set `store.parquet.use_new_reader` = true")
         .build().run();
     } finally {
+      final OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
       test("alter system set `%s` = %b", ExecConstants.PARQUET_NEW_RECORD_READER,
-          ExecConstants.PARQUET_RECORD_READER_IMPLEMENTATION_VALIDATOR.getDefault().bool_val);
+        optionSet.getDefault(ExecConstants.PARQUET_NEW_RECORD_READER).bool_val);
     }
   }
 
@@ -478,10 +486,10 @@ public class TestParquetWriter extends BaseTestQuery {
             "alter system set `store.parquet.use_new_reader` = true")
         .build().run();
     } finally {
+      final OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
       test("alter system set `%s` = %b",
           ExecConstants.PARQUET_NEW_RECORD_READER,
-          ExecConstants.PARQUET_RECORD_READER_IMPLEMENTATION_VALIDATOR
-              .getDefault().bool_val);
+          optionSet.getDefault(ExecConstants.PARQUET_NEW_RECORD_READER).bool_val);
     }
   }
 
@@ -592,6 +600,7 @@ public class TestParquetWriter extends BaseTestQuery {
   }
 
   @Test // DRILL-2341
+  @Category(UnlikelyTest.class)
   public void tableSchemaWhenSelectFieldsInDef_SelectFieldsInView() throws Exception {
     final String newTblName = "testTableOutputSchema";
 
@@ -734,6 +743,7 @@ public class TestParquetWriter extends BaseTestQuery {
           .go();
 
       Configuration hadoopConf = new Configuration();
+      hadoopConf.set(FileSystem.FS_DEFAULT_NAME_KEY, FileSystem.DEFAULT_FS);
       Path output = new Path(getDfsTestTmpSchemaLocation(), outputFile);
       FileSystem fs = output.getFileSystem(hadoopConf);
       for (FileStatus file : fs.listStatus(output)) {
@@ -759,11 +769,11 @@ public class TestParquetWriter extends BaseTestQuery {
       compareParquetReadersColumnar("field_impala_ts", "cp.`parquet/int96_impala_1.parquet`");
     } finally {
       test("alter session reset %s", ExecConstants.PARQUET_READER_INT96_AS_TIMESTAMP);
-  }
+    }
   }
 
   /*
-  Test the reading of a binary field as drill varbinary where data is in dicationary _and_ non-dictionary encoded pages
+  Test the reading of a binary field as drill varbinary where data is in dictionary _and_ non-dictionary encoded pages
    */
   @Test
   public void testImpalaParquetBinaryAsVarBinary_DictChange() throws Exception {
@@ -771,9 +781,10 @@ public class TestParquetWriter extends BaseTestQuery {
   }
 
   /*
-  Test the reading of a binary field as drill timestamp where data is in dicationary _and_ non-dictionary encoded pages
+  Test the reading of a binary field as drill timestamp where data is in dictionary _and_ non-dictionary encoded pages
    */
   @Test
+  @Ignore("relies on particular time zone, works for UTC")
   public void testImpalaParquetBinaryAsTimeStamp_DictChange() throws Exception {
     final String WORKING_PATH = TestTools.getWorkingPath();
     final String TEST_RES_PATH = WORKING_PATH + "/src/test/resources";
@@ -837,6 +848,7 @@ public class TestParquetWriter extends BaseTestQuery {
   Test the conversion from int96 to impala timestamp with hive data including nulls. Validate against expected values
   */
   @Test
+  @Ignore("relies on particular time zone")
   public void testHiveParquetTimestampAsInt96_basic() throws Exception {
     final String q = "SELECT cast(convert_from(timestamp_field, 'TIMESTAMP_IMPALA') as varchar(19))  as timestamp_field "
             + "from cp.`parquet/part1/hive_all_types.parquet` ";
@@ -845,7 +857,7 @@ public class TestParquetWriter extends BaseTestQuery {
             .unOrdered()
             .sqlQuery(q)
             .baselineColumns("timestamp_field")
-            .baselineValues("2013-07-06 00:01:00")
+            .baselineValues("2013-07-05 17:01:00")
             .baselineValues((Object)null)
             .go();
   }
@@ -917,10 +929,11 @@ public class TestParquetWriter extends BaseTestQuery {
     try {
       testBuilder()
           .ordered()
-          .sqlQuery("select `%s` from %s", selection, table)
+          .sqlQuery("select `%1$s` from %2$s order by `%1$s`", selection, table)
           .optionSettingQueriesForTestQuery(
               "alter session set `%s` = true", ExecConstants.PARQUET_READER_INT96_AS_TIMESTAMP)
-          .sqlBaselineQuery("select convert_from(`%1$s`, 'TIMESTAMP_IMPALA') as `%1$s` from %2$s", selection, table)
+          .sqlBaselineQuery("select convert_from(`%1$s`, 'TIMESTAMP_IMPALA') as `%1$s` from %2$s order by `%1$s`",
+              selection, table)
           .optionSettingQueriesForBaseline(
               "alter session set `%s` = false", ExecConstants.PARQUET_READER_INT96_AS_TIMESTAMP)
           .build()
@@ -949,7 +962,8 @@ public class TestParquetWriter extends BaseTestQuery {
       String inputTable = "cp.`tpch/supplier.parquet`";
         runTestAndValidate("*", "*", inputTable, "suppkey_parquet_dict_gzip");
     } finally {
-      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE, ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE_VALIDATOR.getDefault().string_val));
+      final OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
+      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE, optionSet.getDefault(ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE).string_val));
     }
   }
 
@@ -960,21 +974,26 @@ public class TestParquetWriter extends BaseTestQuery {
       String inputTable = "cp.`supplier_snappy.parquet`";
       runTestAndValidate("*", "*", inputTable, "suppkey_parquet_dict_snappy");
     } finally {
-      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE, ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE_VALIDATOR.getDefault().string_val));
+      final OperatorFixture.TestOptionSet optionSet = new OperatorFixture.TestOptionSet();
+      test(String.format("alter session set `%s` = '%s'", ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE, optionSet.getDefault(ExecConstants.PARQUET_WRITER_COMPRESSION_TYPE).string_val));
     }
   }
 
   @Test // DRILL-5097
+  @Category(UnlikelyTest.class)
   public void testInt96TimeStampValueWidth() throws Exception {
     try {
       testBuilder()
-          .ordered()
-          .sqlQuery("select c, d from cp.`parquet/data.snappy.parquet` where d = '2015-07-18 13:52:51'")
+          .unOrdered()
+          .sqlQuery("select c, d from cp.`parquet/data.snappy.parquet` " +
+              "where `a` is not null and `c` is not null and `d` is not null")
           .optionSettingQueriesForTestQuery(
               "alter session set `%s` = true", ExecConstants.PARQUET_READER_INT96_AS_TIMESTAMP)
           .baselineColumns("c", "d")
-          .baselineValues(new DateTime(Date.valueOf("2011-04-11").getTime()),
-              new DateTime(Timestamp.valueOf("2015-07-18 13:52:51").getTime()))
+          .baselineValues(new DateTime(Date.valueOf("2012-12-15").getTime()),
+              new DateTime(convertToLocalTimestamp("2016-04-24 20:06:28")))
+          .baselineValues(new DateTime(Date.valueOf("2011-07-09").getTime()),
+              new DateTime(convertToLocalTimestamp("2015-04-15 22:35:49")))
           .build()
           .run();
     } finally {

@@ -17,19 +17,15 @@
  */
 package org.apache.drill.exec.rpc.user;
 
-import java.io.Closeable;
 import java.io.IOException;
-import java.nio.file.Paths;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.UUID;
 import java.util.concurrent.ConcurrentMap;
 import java.util.concurrent.atomic.AtomicInteger;
 
 import com.google.common.base.Preconditions;
 import com.google.common.base.Strings;
-import com.google.common.collect.ImmutableSet;
 import com.google.common.collect.Lists;
 
 import org.apache.calcite.schema.Schema;
@@ -37,10 +33,11 @@ import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.calcite.tools.ValidationException;
 import org.apache.drill.common.config.DrillConfig;
+import org.apache.drill.common.config.DrillProperties;
+import org.apache.drill.exec.planner.physical.PlannerSettings;
 import org.apache.drill.exec.planner.sql.SchemaUtilites;
 import org.apache.drill.exec.planner.sql.handlers.SqlHandlerUtil;
 import org.apache.drill.exec.proto.UserBitShared.UserCredentials;
-import org.apache.drill.exec.proto.UserProtos.Property;
 import org.apache.drill.exec.proto.UserProtos.UserProperties;
 import org.apache.drill.exec.server.options.OptionManager;
 import org.apache.drill.exec.server.options.SessionOptionManager;
@@ -53,21 +50,13 @@ import org.apache.drill.exec.store.dfs.WorkspaceSchemaFactory;
 import org.apache.hadoop.fs.FileSystem;
 import org.apache.hadoop.fs.Path;
 
-public class UserSession implements Closeable {
+public class UserSession implements AutoCloseable {
   private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(UserSession.class);
-
-  public static final String SCHEMA = "schema";
-  public static final String USER = "user";
-  public static final String PASSWORD = "password";
-  public static final String IMPERSONATION_TARGET = "impersonation_target";
-
-  // known property names in lower case
-  private static final Set<String> knownProperties = ImmutableSet.of(SCHEMA, USER, PASSWORD, IMPERSONATION_TARGET);
 
   private boolean supportComplexTypes = false;
   private UserCredentials credentials;
-  private Map<String, String> properties;
-  private OptionManager sessionOptions;
+  private DrillProperties properties;
+  private SessionOptionManager sessionOptions;
   private final AtomicInteger queryCount;
   private final String sessionId;
 
@@ -122,18 +111,7 @@ public class UserSession implements Closeable {
     }
 
     public Builder withUserProperties(UserProperties properties) {
-      userSession.properties = Maps.newHashMap();
-      if (properties != null) {
-        for (int i = 0; i < properties.getPropertiesCount(); i++) {
-          final Property property = properties.getProperties(i);
-          final String propertyName = property.getKey().toLowerCase();
-          if (knownProperties.contains(propertyName)) {
-            userSession.properties.put(propertyName, property.getValue());
-          } else {
-            logger.warn("Ignoring unknown property: {}", propertyName);
-          }
-        }
-      }
+      userSession.properties = DrillProperties.createFromProperties(properties, false);
       return this;
     }
 
@@ -143,6 +121,15 @@ public class UserSession implements Closeable {
     }
 
     public UserSession build() {
+      if (userSession.properties.containsKey(DrillProperties.QUOTING_IDENTIFIERS)) {
+        if (userSession.sessionOptions != null) {
+          userSession.setSessionOption(PlannerSettings.QUOTING_IDENTIFIERS_KEY,
+              userSession.properties.getProperty(DrillProperties.QUOTING_IDENTIFIERS));
+        } else {
+          logger.warn("User property {} can't be installed as a server option without the session option manager",
+              DrillProperties.QUOTING_IDENTIFIERS);
+        }
+      }
       UserSession session = userSession;
       userSession = null;
       return session;
@@ -158,13 +145,14 @@ public class UserSession implements Closeable {
     sessionId = UUID.randomUUID().toString();
     temporaryTables = Maps.newConcurrentMap();
     temporaryLocations = Maps.newConcurrentMap();
+    properties = DrillProperties.createEmpty();
   }
 
   public boolean isSupportComplexTypes() {
     return supportComplexTypes;
   }
 
-  public OptionManager getOptions() {
+  public SessionOptionManager getOptions() {
     return sessionOptions;
   }
 
@@ -187,11 +175,7 @@ public class UserSession implements Closeable {
   }
 
   public String getTargetUserName() {
-    return properties.get(IMPERSONATION_TARGET);
-  }
-
-  public String getDefaultSchemaName() {
-    return getProp(SCHEMA);
+    return properties.getProperty(DrillProperties.IMPERSONATION_TARGET);
   }
 
   public void incrementQueryCount(final QueryCountIncrementer incrementer) {
@@ -228,14 +212,14 @@ public class UserSession implements Closeable {
       SchemaUtilites.throwSchemaNotFoundException(currentDefaultSchema, newDefaultSchemaPath);
     }
 
-    setProp(SCHEMA, SchemaUtilites.getSchemaPath(newDefault));
+    properties.setProperty(DrillProperties.SCHEMA, SchemaUtilites.getSchemaPath(newDefault));
   }
 
   /**
    * @return Get current default schema path.
    */
   public String getDefaultSchemaPath() {
-    return getProp(SCHEMA);
+    return properties.getProperty(DrillProperties.SCHEMA, "");
   }
 
   /**
@@ -244,7 +228,7 @@ public class UserSession implements Closeable {
    * @return A {@link org.apache.calcite.schema.SchemaPlus} object.
    */
   public SchemaPlus getDefaultSchema(SchemaPlus rootSchema) {
-    final String defaultSchemaPath = getProp(SCHEMA);
+    final String defaultSchemaPath = getDefaultSchemaPath();
 
     if (Strings.isNullOrEmpty(defaultSchemaPath)) {
       return null;
@@ -253,8 +237,15 @@ public class UserSession implements Closeable {
     return SchemaUtilites.findSchema(rootSchema, defaultSchemaPath);
   }
 
-  public boolean setSessionOption(String name, String value) {
-    return true;
+  /**
+   * Set the option of a session level.
+   * Note: Option's kind is automatically detected if such option exists.
+   *
+   * @param name option name
+   * @param value option value
+   */
+  public void setSessionOption(String name, String value) {
+    sessionOptions.setLocalOption(name, value);
   }
 
   /**
@@ -264,6 +255,7 @@ public class UserSession implements Closeable {
 
   /**
    * Creates and adds session temporary location if absent using schema configuration.
+   * Before any actions, checks if passed table schema is valid default temporary workspace.
    * Generates temporary table name and stores it's original name as key
    * and generated name as value in  session temporary tables cache.
    * Original temporary name is converted to lower case to achieve case-insensitivity.
@@ -273,14 +265,15 @@ public class UserSession implements Closeable {
    *
    * @param schema table schema
    * @param tableName original table name
+   * @param config drill config
    * @return generated temporary table name
    * @throws IOException if error during session temporary location creation
    */
-  public String registerTemporaryTable(AbstractSchema schema, String tableName) throws IOException {
-      addTemporaryLocation((WorkspaceSchemaFactory.WorkspaceSchema) schema);
-      String temporaryTableName = Paths.get(sessionId, UUID.randomUUID().toString()).toString();
-      String oldTemporaryTableName = temporaryTables.putIfAbsent(tableName.toLowerCase(), temporaryTableName);
-      return oldTemporaryTableName == null ? temporaryTableName : oldTemporaryTableName;
+  public String registerTemporaryTable(AbstractSchema schema, String tableName, DrillConfig config) throws IOException {
+    addTemporaryLocation(SchemaUtilites.resolveToValidTemporaryWorkspace(schema, config));
+    String temporaryTableName = new Path(sessionId, UUID.randomUUID().toString()).toUri().getPath();
+    String oldTemporaryTableName = temporaryTables.putIfAbsent(tableName.toLowerCase(), temporaryTableName);
+    return oldTemporaryTableName == null ? temporaryTableName : oldTemporaryTableName;
   }
 
   /**
@@ -310,7 +303,7 @@ public class UserSession implements Closeable {
    * @return true if temporary table exists in schema, false otherwise
    */
   public boolean isTemporaryTable(AbstractSchema drillSchema, DrillConfig config, String tableName) {
-    if (!SchemaUtilites.isTemporaryWorkspace(drillSchema.getFullSchemaName(), config)) {
+    if (drillSchema == null || !SchemaUtilites.isTemporaryWorkspace(drillSchema.getFullSchemaName(), config)) {
       return false;
     }
     String temporaryTableName = resolveTemporaryTableName(tableName);
@@ -326,15 +319,18 @@ public class UserSession implements Closeable {
   /**
    * Removes temporary table name from the list of session temporary tables.
    * Original temporary name is converted to lower case to achieve case-insensitivity.
+   * Before temporary table drop, checks if passed table schema is valid default temporary workspace.
    *
+   * @param schema table schema
    * @param tableName original table name
+   * @param config drill config
    */
-  public void removeTemporaryTable(AbstractSchema drillSchema, String tableName) {
+  public void removeTemporaryTable(AbstractSchema schema, String tableName, DrillConfig config) {
     String temporaryTable = resolveTemporaryTableName(tableName);
     if (temporaryTable == null) {
       return;
     }
-    SqlHandlerUtil.dropTableFromSchema(drillSchema, temporaryTable);
+    SqlHandlerUtil.dropTableFromSchema(SchemaUtilites.resolveToValidTemporaryWorkspace(schema, config), temporaryTable);
     temporaryTables.remove(tableName.toLowerCase());
   }
 
@@ -351,8 +347,8 @@ public class UserSession implements Closeable {
    */
   private void addTemporaryLocation(WorkspaceSchemaFactory.WorkspaceSchema temporaryWorkspace) throws IOException {
     DrillFileSystem fs = temporaryWorkspace.getFS();
-    Path temporaryLocation = new Path(Paths.get(fs.getUri().toString(),
-        temporaryWorkspace.getDefaultLocation(), sessionId).toString());
+    Path temporaryLocation = new Path(fs.getUri().toString(),
+        new Path(temporaryWorkspace.getDefaultLocation(), sessionId));
 
     FileSystem fileSystem = temporaryLocations.putIfAbsent(temporaryLocation, fs);
 
@@ -361,13 +357,5 @@ public class UserSession implements Closeable {
       Preconditions.checkArgument(fs.exists(temporaryLocation),
           String.format("Temporary location should exist [%s]", temporaryLocation.toUri().getPath()));
     }
-  }
-
-  private String getProp(String key) {
-    return properties.get(key) != null ? properties.get(key) : "";
-  }
-
-  private void setProp(String key, String value) {
-    properties.put(key, value);
   }
 }

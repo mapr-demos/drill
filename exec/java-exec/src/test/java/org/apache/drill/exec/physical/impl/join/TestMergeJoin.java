@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -23,6 +23,7 @@ import static org.junit.Assert.assertTrue;
 import java.util.ArrayList;
 import java.util.List;
 
+import org.apache.drill.categories.OperatorTest;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.util.FileUtils;
 import org.apache.drill.exec.client.DrillClient;
@@ -37,13 +38,13 @@ import org.apache.drill.exec.planner.PhysicalPlanReaderTestFactory;
 import org.apache.drill.exec.pop.PopUnitTestBase;
 import org.apache.drill.exec.proto.BitControl.PlanFragment;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
-import org.apache.drill.exec.rpc.user.UserServer;
-import org.apache.drill.exec.rpc.user.UserServer.UserClientConnection;
+import org.apache.drill.exec.rpc.UserClientConnection;
 import org.apache.drill.exec.server.Drillbit;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.store.StoragePluginRegistryImpl;
 import org.apache.drill.exec.vector.ValueVector;
+import org.apache.drill.categories.SlowTest;
 import org.junit.Ignore;
 import org.junit.Test;
 
@@ -52,8 +53,9 @@ import com.google.common.collect.Lists;
 import com.google.common.io.Files;
 
 import mockit.Injectable;
+import org.junit.experimental.categories.Category;
 
-
+@Category({SlowTest.class, OperatorTest.class})
 public class TestMergeJoin extends PopUnitTestBase {
   //private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestMergeJoin.class);
   private final DrillConfig c = DrillConfig.create();
@@ -61,7 +63,7 @@ public class TestMergeJoin extends PopUnitTestBase {
   @Test
   @Ignore // this doesn't have a sort.  it also causes an infinite loop.  these may or may not be related.
   public void simpleEqualityJoin(@Injectable final DrillbitContext bitContext,
-                                 @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                 @Injectable UserClientConnection connection) throws Throwable {
 
     mockDrillbitContext(bitContext);
 
@@ -75,7 +77,7 @@ public class TestMergeJoin extends PopUnitTestBase {
     while (exec.next()) {
       totalRecordCount += exec.getRecordCount();
       for (final ValueVector v : exec) {
-        System.out.print("[" + v.getField().getPath() + "]        ");
+        System.out.print("[" + v.getField().getName() + "]        ");
       }
       System.out.println("\n");
       for (int valueIdx = 0; valueIdx < exec.getRecordCount(); valueIdx++) {
@@ -109,7 +111,7 @@ public class TestMergeJoin extends PopUnitTestBase {
   @Test
   @Ignore
   public void orderedEqualityLeftJoin(@Injectable final DrillbitContext bitContext,
-                                      @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                      @Injectable UserClientConnection connection) throws Throwable {
     mockDrillbitContext(bitContext);
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c,
@@ -132,7 +134,7 @@ public class TestMergeJoin extends PopUnitTestBase {
       for (int valueIdx = 0; valueIdx < exec.getRecordCount(); valueIdx++) {
         final List<Object> row = Lists.newArrayList();
         for (final ValueVector v : exec) {
-          row.add(v.getField().getPath() + ":" + v.getAccessor().getObject(valueIdx));
+          row.add(v.getField().getName() + ":" + v.getAccessor().getObject(valueIdx));
         }
         for (final Object cell : row) {
           if (cell == null) {
@@ -160,7 +162,7 @@ public class TestMergeJoin extends PopUnitTestBase {
   @Test
   @Ignore
   public void orderedEqualityInnerJoin(@Injectable final DrillbitContext bitContext,
-                                       @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                       @Injectable UserClientConnection connection) throws Throwable {
     mockDrillbitContext(bitContext);
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c,
@@ -183,7 +185,7 @@ public class TestMergeJoin extends PopUnitTestBase {
       for (int valueIdx = 0; valueIdx < exec.getRecordCount(); valueIdx++) {
         final List<Object> row = Lists.newArrayList();
         for (final ValueVector v : exec) {
-          row.add(v.getField().getPath() + ":" + v.getAccessor().getObject(valueIdx));
+          row.add(v.getField().getName() + ":" + v.getAccessor().getObject(valueIdx));
         }
         for (final Object cell : row) {
           if (cell == null) {
@@ -211,7 +213,7 @@ public class TestMergeJoin extends PopUnitTestBase {
   @Test
   @Ignore
   public void orderedEqualityMultiBatchJoin(@Injectable final DrillbitContext bitContext,
-                                            @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                                            @Injectable UserClientConnection connection) throws Throwable {
     mockDrillbitContext(bitContext);
 
     final PhysicalPlanReader reader = PhysicalPlanReaderTestFactory.defaultPhysicalPlanReader(c,
@@ -233,7 +235,7 @@ public class TestMergeJoin extends PopUnitTestBase {
       for (int valueIdx = 0; valueIdx < exec.getRecordCount(); valueIdx++) {
         final List<Object> row = Lists.newArrayList();
         for (final ValueVector v : exec) {
-          row.add(v.getField().getPath() + ":" + v.getAccessor().getObject(valueIdx));
+          row.add(v.getField().getName() + ":" + v.getAccessor().getObject(valueIdx));
         }
         for (final Object cell : row) {
           if (cell == null) {

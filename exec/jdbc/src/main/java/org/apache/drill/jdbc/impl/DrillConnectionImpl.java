@@ -25,6 +25,7 @@ import java.sql.Connection;
 import java.sql.DatabaseMetaData;
 import java.sql.NClob;
 import java.sql.PreparedStatement;
+import java.sql.ResultSet;
 import java.sql.SQLClientInfoException;
 import java.sql.SQLException;
 import java.sql.SQLFeatureNotSupportedException;
@@ -43,16 +44,17 @@ import org.apache.calcite.avatica.AvaticaConnection;
 import org.apache.calcite.avatica.AvaticaFactory;
 import org.apache.calcite.avatica.AvaticaStatement;
 import org.apache.calcite.avatica.Meta.ExecuteResult;
+import org.apache.calcite.avatica.Meta.MetaResultSet;
 import org.apache.calcite.avatica.UnregisteredDriver;
 import org.apache.drill.common.config.DrillConfig;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
 import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.exec.client.DrillClient;
+import org.apache.drill.exec.client.InvalidConnectionInfoException;
 import org.apache.drill.exec.exception.OutOfMemoryException;
 import org.apache.drill.exec.memory.BufferAllocator;
 import org.apache.drill.exec.memory.RootAllocatorFactory;
 import org.apache.drill.exec.rpc.RpcException;
-import org.apache.drill.exec.rpc.InvalidConnectionInfoException;
 import org.apache.drill.exec.server.Drillbit;
 import org.apache.drill.exec.server.RemoteServiceSet;
 import org.apache.drill.exec.store.StoragePluginRegistry;
@@ -91,8 +93,9 @@ class DrillConnectionImpl extends AvaticaConnection
     super(driver, factory, url, info);
 
     // Initialize transaction-related settings per Drill behavior.
-    super.setTransactionIsolation( TRANSACTION_NONE );
-    super.setAutoCommit( true );
+    super.setTransactionIsolation(TRANSACTION_NONE);
+    super.setAutoCommit(true);
+    super.setReadOnly(false);
 
     this.config = new DrillConnectionConfig(info);
 
@@ -154,15 +157,21 @@ class DrillConnectionImpl extends AvaticaConnection
       this.client.setClientName("Apache Drill JDBC Driver");
       this.client.connect(connect, info);
     } catch (OutOfMemoryException e) {
-      throw new SQLException("Failure creating root allocator", e);
+      throw new SQLNonTransientConnectionException("Failure creating root allocator", e);
     } catch (InvalidConnectionInfoException e) {
-      throw new SQLException("Invalid parameter in connection string: " + e.getMessage(), e);
+      throw new SQLNonTransientConnectionException("Invalid parameter in connection string: " + e.getMessage(), e);
     } catch (RpcException e) {
       // (Include cause exception's text in wrapping exception's text so
       // it's more likely to get to user (e.g., via SQLLine), and use
       // toString() since getMessage() text doesn't always mention error:)
-      throw new SQLException("Failure in connecting to Drill: " + e, e);
+      throw new SQLNonTransientConnectionException("Failure in connecting to Drill: " + e, e);
     }
+  }
+
+
+  @Override
+  protected ResultSet createResultSet(MetaResultSet metaResultSet) throws SQLException {
+    return super.createResultSet(metaResultSet);
   }
 
   @Override

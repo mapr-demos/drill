@@ -38,7 +38,6 @@ import org.apache.drill.exec.expr.ExpressionTreeMaterializer;
 import org.apache.drill.exec.expr.TypeHelper;
 import org.apache.drill.exec.expr.ValueVectorReadExpression;
 import org.apache.drill.exec.expr.ValueVectorWriteExpression;
-import org.apache.drill.exec.expr.fn.DrillComplexWriterFuncHolder;
 import org.apache.drill.exec.ops.FragmentContext;
 import org.apache.drill.exec.physical.config.FlattenPOP;
 import org.apache.drill.exec.record.AbstractSingleRecordBatch;
@@ -254,8 +253,7 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
   }
 
   private FieldReference getRef(NamedExpression e) {
-    final FieldReference ref = e.getRef();
-    return ref;
+    return e.getRef();
   }
 
   /**
@@ -334,8 +332,7 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
 
     ClassifierResult result = new ClassifierResult();
 
-    for (int i = 0; i < exprs.size(); i++) {
-      final NamedExpression namedExpression = exprs.get(i);
+    for (NamedExpression namedExpression : exprs) {
       result.clear();
 
       String outputName = getRef(namedExpression).getRootSegment().getPath();
@@ -349,12 +346,11 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
       }
 
       final LogicalExpression expr = ExpressionTreeMaterializer.materialize(namedExpression.getExpr(), incoming, collector, context.getFunctionRegistry(), true);
-      final MaterializedField outputField = MaterializedField.create(outputName, expr.getMajorType());
       if (collector.hasErrors()) {
         throw new SchemaChangeException(String.format("Failure while trying to materialize incoming schema.  Errors:\n %s.", collector.toErrorString()));
       }
       if (expr instanceof DrillFuncHolderExpr &&
-          ((DrillFuncHolderExpr) expr).isComplexWriterFuncHolder())  {
+          ((DrillFuncHolderExpr) expr).getHolder().isComplexWriterFuncHolder()) {
         // Need to process ComplexWriter function evaluation.
         // Lazy initialization of the list of complex writers, if not done yet.
         if (complexWriters == null) {
@@ -362,12 +358,27 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
         }
 
         // The reference name will be passed to ComplexWriter, used as the name of the output vector from the writer.
-        ((DrillComplexWriterFuncHolder) ((DrillFuncHolderExpr) expr).getHolder()).setReference(namedExpression.getRef());
+        ((DrillFuncHolderExpr) expr).getFieldReference(namedExpression.getRef());
         cg.addExpr(expr);
-      } else{
+      } else {
         // need to do evaluation.
+        final MaterializedField outputField;
+        if (expr instanceof ValueVectorReadExpression) {
+          final TypedFieldId id = ValueVectorReadExpression.class.cast(expr).getFieldId();
+          @SuppressWarnings("resource")
+          final ValueVector incomingVector = incoming.getValueAccessorById(id.getIntermediateClass(), id.getFieldIds()).getValueVector();
+          // outputField is taken from the incoming schema to avoid the loss of nested fields
+          // when the first batch will be empty.
+          if (incomingVector != null) {
+            outputField = incomingVector.getField().clone();
+          } else {
+            outputField = MaterializedField.create(outputName, expr.getMajorType());
+          }
+        } else {
+          outputField = MaterializedField.create(outputName, expr.getMajorType());
+        }
         @SuppressWarnings("resource")
-        ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
+        final ValueVector vector = TypeHelper.getNewVector(outputField, oContext.getAllocator());
         allocationVectors.add(vector);
         TypedFieldId fid = container.add(vector);
         ValueVectorWriteExpression write = new ValueVectorWriteExpression(fid, expr, true);
@@ -395,10 +406,11 @@ public class FlattenRecordBatch extends AbstractSingleRecordBatch<FlattenPOP> {
 
     List<NamedExpression> exprs = Lists.newArrayList();
     for (MaterializedField field : incoming.getSchema()) {
-      if (field.getPath().equals(popConfig.getColumn().getAsUnescapedPath())) {
+      String fieldName = field.getName();
+      if (fieldName.equals(popConfig.getColumn().getRootSegmentPath())) {
         continue;
       }
-      exprs.add(new NamedExpression(SchemaPath.getSimplePath(field.getPath()), new FieldReference(field.getPath())));
+      exprs.add(new NamedExpression(SchemaPath.getSimplePath(fieldName), new FieldReference(fieldName)));
     }
     return exprs;
   }

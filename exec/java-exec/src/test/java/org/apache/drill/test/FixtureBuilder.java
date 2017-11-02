@@ -17,12 +17,14 @@
  ******************************************************************************/
 package org.apache.drill.test;
 
+import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
 
 import org.apache.drill.exec.ExecConstants;
 import org.apache.drill.exec.ZookeeperHelper;
+import org.apache.drill.exec.server.options.OptionDefinition;
 
 /**
  * Build a Drillbit and client with the options provided. The simplest
@@ -48,34 +50,27 @@ public class FixtureBuilder {
   public static final int DEFAULT_ZK_REFRESH = 500; // ms
   public static final int DEFAULT_SERVER_RPC_THREADS = 10;
   public static final int DEFAULT_SCAN_THREADS = 8;
+  public static final String OPTION_DEFAULTS_ROOT = "drill.exec.options.";
 
-  public static Properties defaultProps() {
-    Properties props = new Properties();
-    props.putAll(ClusterFixture.TEST_CONFIGURATIONS);
-    return props;
-  }
-
-  String configResource;
-  Properties configProps;
-  boolean enableFullCache;
-  List<RuntimeOption> sessionOptions;
-  List<RuntimeOption> systemOptions;
-  int bitCount = 1;
-  String bitNames[];
-  int zkCount;
-  ZookeeperHelper zkHelper;
+  protected ConfigBuilder configBuilder = new ConfigBuilder();
+  protected List<RuntimeOption> sessionOptions;
+  protected List<RuntimeOption> systemOptions;
+  protected int bitCount = 1;
+  protected String bitNames[];
+  protected int localZkCount;
+  protected ZookeeperHelper zkHelper;
+  protected boolean usingZk;
+  protected File tempDir;
+  protected boolean preserveLocalFiles;
+  protected Properties clientProps;
 
   /**
-   * Use the given configuration properties to start the embedded Drillbit.
-   * @param configProps a collection of config properties
-   * @return this builder
-   * @see {@link #configProperty(String, Object)}
+   * The configuration builder which this fixture builder uses.
+   * @return the configuration builder for use in setting "advanced"
+   * configuration options.
    */
 
-  public FixtureBuilder configProps(Properties configProps) {
-    this.configProps = configProps;
-    return this;
-  }
+  public ConfigBuilder configBuilder() { return configBuilder; }
 
   /**
    * Use the given configuration file, stored as a resource, to start the
@@ -99,10 +94,18 @@ public class FixtureBuilder {
     // require it. Silently discard the leading slash if given to
     // preserve the test writer's sanity.
 
-    this.configResource = ClusterFixture.trimSlash(configResource);
+    configBuilder.resource(ClusterFixture.trimSlash(configResource));
     return this;
   }
 
+  /**
+   *
+   */
+   public FixtureBuilder setOptionDefault(String key, Object value) {
+     String option_name = OPTION_DEFAULTS_ROOT + key;
+     configBuilder().put(option_name, value.toString());
+     return this;
+   }
   /**
    * Add an additional boot-time property for the embedded Drillbit.
    * @param key config property name
@@ -111,10 +114,27 @@ public class FixtureBuilder {
    */
 
   public FixtureBuilder configProperty(String key, Object value) {
-    if (configProps == null) {
-      configProps = defaultProps();
+    configBuilder.put(key, value.toString());
+    return this;
+  }
+
+  public FixtureBuilder putDefinition(OptionDefinition definition) {
+    configBuilder.putDefinition(definition);
+    return this;
+  }
+
+  /**
+   * Add an additional property for the client connection URL. Convert all the values into
+   * String type.
+   * @param key config property name
+   * @param value property value
+   * @return this builder
+   */
+  public FixtureBuilder configClientProperty(String key, Object value) {
+    if (clientProps == null) {
+      clientProps = new Properties();
     }
-    configProps.put(key, value.toString());
+    clientProps.put(key, value.toString());
     return this;
   }
 
@@ -165,11 +185,6 @@ public class FixtureBuilder {
     return sessionOption(ExecConstants.MAX_WIDTH_PER_NODE_KEY, n);
   }
 
-  public FixtureBuilder enableFullCache() {
-    enableFullCache = true;
-    return this;
-  }
-
   /**
    * The number of Drillbits to start in the cluster.
    *
@@ -201,17 +216,22 @@ public class FixtureBuilder {
    * Drillbits.
    * @return this builder
    */
-  public FixtureBuilder withZk() {
-    return withZk(1);
+  public FixtureBuilder withLocalZk() {
+    return withLocalZk(1);
   }
 
-  public FixtureBuilder withZk(int count) {
-    zkCount = count;
+  public FixtureBuilder withLocalZk(int count) {
+    localZkCount = count;
+    usingZk = true;
 
     // Using ZK. Turn refresh wait back on.
 
-    configProperty(ExecConstants.ZK_REFRESH, DEFAULT_ZK_REFRESH);
-    return this;
+    return configProperty(ExecConstants.ZK_REFRESH, DEFAULT_ZK_REFRESH);
+  }
+
+  public FixtureBuilder withRemoteZk(String connStr) {
+    usingZk = true;
+    return configProperty(ExecConstants.ZK_CONNECTION, connStr);
   }
 
   /**
@@ -224,10 +244,56 @@ public class FixtureBuilder {
    */
   public FixtureBuilder withZk(ZookeeperHelper zk) {
     zkHelper = zk;
+    usingZk = true;
 
     // Using ZK. Turn refresh wait back on.
 
     configProperty(ExecConstants.ZK_REFRESH, DEFAULT_ZK_REFRESH);
+    return this;
+  }
+
+  public FixtureBuilder tempDir(File path) {
+    this.tempDir = path;
+    return this;
+  }
+
+  /**
+   * Starting with the addition of the CTTAS feature, a Drillbit will
+   * not restart unless we delete all local storage files before
+   * starting the Drillbit again. In particular, the stored copies
+   * of the storage plugin configs cause the temporary workspace
+   * check to fail. Normally the cluster fixture cleans up files
+   * both before starting and after shutting down the cluster. Set this
+   * option to preserve files after shutdown, perhaps to debug the
+   * contents.
+   * <p>
+   * This clean-up is needed only if we enable local storage writes
+   * (which we must do, unfortunately, to capture and analyze
+   * storage profiles.)
+   *
+   * @return this builder
+   */
+
+  public FixtureBuilder keepLocalFiles() {
+    preserveLocalFiles = true;
+    return this;
+  }
+
+  /**
+   * Enable saving of query profiles. The only way to save them is
+   * to enable local store provider writes, which also saves the
+   * storage plugin configs. Doing so causes the CTTAS feature to
+   * fail on the next run, so the test fixture deletes all local
+   * files on start and close, unless
+   * {@link #keepLocalFiles()} is set.
+   *
+   * @return this builder
+   */
+
+  public FixtureBuilder saveProfiles() {
+    configProperty(ExecConstants.SYS_STORE_PROVIDER_LOCAL_ENABLE_WRITE, true);
+    systemOption(ExecConstants.ENABLE_QUERY_PROFILE_OPTION, true);
+    systemOption(ExecConstants.QUERY_PROFILE_DEBUG_OPTION, true);
     return this;
   }
 
@@ -252,9 +318,9 @@ public class FixtureBuilder {
    * need them.
    *
    * @return
-   * @throws Exception
    */
-  public ClusterFixture build() throws Exception {
+
+  public ClusterFixture build() {
     return new ClusterFixture(this);
   }
 }

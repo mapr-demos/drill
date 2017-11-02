@@ -17,6 +17,11 @@
  */
 package org.apache.drill.test;
 
+import java.io.BufferedReader;
+import java.io.File;
+import java.io.FileNotFoundException;
+import java.io.FileReader;
+import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutionException;
@@ -31,11 +36,13 @@ import org.apache.drill.common.exceptions.UserException;
 import org.apache.drill.common.expression.SchemaPath;
 import org.apache.drill.exec.client.PrintingResultsListener;
 import org.apache.drill.exec.client.QuerySubmitter.Format;
+import org.apache.drill.exec.exception.SchemaChangeException;
 import org.apache.drill.exec.proto.UserBitShared.QueryId;
 import org.apache.drill.exec.proto.UserBitShared.QueryResult.QueryState;
 import org.apache.drill.exec.proto.UserBitShared.QueryType;
 import org.apache.drill.exec.proto.helper.QueryIdHelper;
 import org.apache.drill.exec.record.RecordBatchLoader;
+import org.apache.drill.exec.record.VectorContainer;
 import org.apache.drill.exec.record.VectorWrapper;
 import org.apache.drill.exec.rpc.ConnectionThrottle;
 import org.apache.drill.exec.rpc.RpcException;
@@ -46,6 +53,10 @@ import org.apache.drill.exec.util.VectorUtil;
 import org.apache.drill.exec.vector.NullableVarCharVector;
 import org.apache.drill.exec.vector.ValueVector;
 import org.apache.drill.test.BufferingQueryEventListener.QueryEvent;
+import org.apache.drill.test.ClientFixture.StatementParser;
+import org.apache.drill.test.rowSet.DirectRowSet;
+import org.apache.drill.test.rowSet.RowSet;
+import org.apache.drill.test.rowSet.RowSet.RowSetReader;
 
 import com.google.common.base.Preconditions;
 
@@ -62,6 +73,11 @@ public class QueryBuilder {
    */
 
   public class SummaryOnlyQueryEventListener implements UserResultsListener {
+
+    /**
+     * The future to be notified. Created here and returned by the
+     * query builder.
+     */
 
     private final QuerySummaryFuture future;
     private QueryId queryId;
@@ -220,6 +236,25 @@ public class QueryBuilder {
     return sql(String.format(query, args));
   }
 
+  /**
+   * Parse a single SQL statement (with optional ending semi-colon) from
+   * the file provided.
+   * @param file the file containing exactly one SQL statement, with
+   * optional ending semi-colon
+   * @return this builder
+   */
+
+  public QueryBuilder sql(File file) throws FileNotFoundException, IOException {
+    try (BufferedReader in = new BufferedReader(new FileReader(file))) {
+      StatementParser parser = new StatementParser(in);
+      String sql = parser.parseNext();
+      if (sql == null) {
+        throw new IllegalArgumentException("No query found");
+      }
+      return sql(sql);
+    }
+  }
+
   public QueryBuilder physical(String plan) {
     return query(QueryType.PHYSICAL, plan);
   }
@@ -263,6 +298,123 @@ public class QueryBuilder {
     Preconditions.checkNotNull(queryType, "Query not provided.");
     Preconditions.checkNotNull(queryText, "Query not provided.");
     return client.client().runQuery(queryType, queryText);
+  }
+
+  /**
+   * Run the query and return the first result set as a
+   * {@link DirectRowSet} object that can be inspected directly
+   * by the code using a {@link RowSetReader}.
+   * <p>
+   * An enhancement is to provide a way to read a series of result
+   * batches as row sets.
+   * @return a row set that represents the first batch returned from
+   * the query
+   * @throws RpcException if anything goes wrong
+   */
+
+  public DirectRowSet rowSet() throws RpcException {
+
+    // Ignore all but the first non-empty batch.
+
+    QueryDataBatch dataBatch = null;
+    for (QueryDataBatch batch : results()) {
+      if (dataBatch == null  &&  batch.getHeader().getRowCount() != 0) {
+        dataBatch = batch;
+      } else {
+        batch.release();
+      }
+    }
+
+    // No results?
+
+    if (dataBatch == null) {
+      return null;
+    }
+
+    // Unload the batch and convert to a row set.
+
+    final RecordBatchLoader loader = new RecordBatchLoader(client.allocator());
+    try {
+      loader.load(dataBatch.getHeader().getDef(), dataBatch.getData());
+      dataBatch.release();
+      VectorContainer container = loader.getContainer();
+      container.setRecordCount(loader.getRecordCount());
+      return new DirectRowSet(client.allocator(), container);
+    } catch (SchemaChangeException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  public QueryRowSetIterator rowSetIterator( ) {
+    return new QueryRowSetIterator(client.allocator(), withEventListener());
+  }
+
+  /**
+   * Run the query that is expected to return (at least) one row
+   * with the only (or first) column returning a long value.
+   * The long value cannot be null.
+   *
+   * @return the value of the first column of the first row
+   * @throws RpcException if anything goes wrong
+   */
+
+  public long singletonLong() throws RpcException {
+    RowSet rowSet = rowSet();
+    if (rowSet == null) {
+      throw new IllegalStateException("No rows returned");
+    }
+    RowSetReader reader = rowSet.reader();
+    reader.next();
+    long value = reader.column(0).getLong();
+    rowSet.clear();
+    return value;
+  }
+
+  /**
+   * Run the query that is expected to return (at least) one row
+   * with the only (or first) column returning a int value.
+   * The int value cannot be null.
+   *
+   * @return the value of the first column of the first row
+   * @throws RpcException if anything goes wrong
+   */
+
+  public int singletonInt() throws RpcException {
+    RowSet rowSet = rowSet();
+    if (rowSet == null) {
+      throw new IllegalStateException("No rows returned");
+    }
+    RowSetReader reader = rowSet.reader();
+    reader.next();
+    int value = reader.column(0).getInt();
+    rowSet.clear();
+    return value;
+  }
+
+  /**
+   * Run the query that is expected to return (at least) one row
+   * with the only (or first) column returning a string value.
+   * The value may be null, in which case a null string is returned.
+   *
+   * @return the value of the first column of the first row
+   * @throws RpcException if anything goes wrong
+   */
+
+  public String singletonString() throws RpcException {
+    RowSet rowSet = rowSet();
+    if (rowSet == null) {
+      throw new IllegalStateException("No rows returned");
+    }
+    RowSetReader reader = rowSet.reader();
+    reader.next();
+    String value;
+    if (reader.column(0).isNull()) {
+      value = null;
+    } else {
+      value = reader.column(0).getString();
+    }
+    rowSet.clear();
+    return value;
   }
 
   /**
@@ -326,14 +478,13 @@ public class QueryBuilder {
    * @return the number of rows returned
    * @throws Exception if anything goes wrong with query execution
    */
+
   public long print() throws Exception {
     DrillConfig config = client.cluster().config( );
 
-    // Note: verbose check disabled until that change is
-    // committed.
 
-    boolean verbose = ! config.getBoolean(QueryTestUtil.TEST_QUERY_PRINTING_SILENT) /* ||
-                      DrillTest.verbose() */;
+    boolean verbose = ! config.getBoolean(QueryTestUtil.TEST_QUERY_PRINTING_SILENT) ||
+                      DrillTest.verbose();
     if (verbose) {
       return print(Format.TSV, VectorUtil.DEFAULT_COLUMN_WIDTH);
     } else {

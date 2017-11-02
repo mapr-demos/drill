@@ -1,4 +1,4 @@
-/**
+/*
  * Licensed to the Apache Software Foundation (ASF) under one
  * or more contributor license agreements.  See the NOTICE file
  * distributed with this work for additional information
@@ -36,10 +36,12 @@ import java.sql.Statement;
 import java.sql.Types;
 
 import org.apache.drill.jdbc.test.JdbcAssert;
+import org.apache.drill.categories.JdbcTest;
 import org.junit.AfterClass;
 import org.junit.BeforeClass;
 import org.junit.Ignore;
 import org.junit.Test;
+import org.junit.experimental.categories.Category;
 
 // NOTE: TestInformationSchemaColumns and DatabaseMetaDataGetColumnsTest
 // have identical sections.  (Cross-maintain them for now; factor out later.)
@@ -81,6 +83,7 @@ import org.junit.Test;
  *   Based on JDBC 4.1 (Java 7).
  * </p>
  */
+@Category(JdbcTest.class)
 public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
 
   private static final String VIEW_SCHEMA = "dfs_test.tmp";
@@ -88,14 +91,14 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
       DatabaseMetaDataGetColumnsTest.class.getSimpleName() + "_View";
 
   /** The one shared JDBC connection to Drill. */
-  private static Connection connection;
+  protected static Connection connection;
 
   /** Overall (connection-level) metadata. */
-  private static DatabaseMetaData dbMetadata;
+  protected static DatabaseMetaData dbMetadata;
 
   /** getColumns result metadata.  For checking columns themselves (not cell
    *  values or row order). */
-  private static ResultSetMetaData rowsMetadata;
+  protected static ResultSetMetaData rowsMetadata;
 
 
   ////////////////////
@@ -181,8 +184,7 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
   }
 
   @BeforeClass
-  public static void setUpConnectionAndMetadataToCheck() throws Exception {
-
+  public static void setUpConnection() throws Exception {
     // Get JDBC connection to Drill:
     // (Note: Can't use JdbcTest's connect(...) because JdbcTest closes
     // Connection--and other JDBC objects--on test method failure, but this test
@@ -190,6 +192,11 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
     connection = new Driver().connect( "jdbc:drill:zk=local",
                                        JdbcAssert.getDefaultProperties() );
     dbMetadata = connection.getMetaData();
+
+    setUpMetadataToCheck();
+  }
+
+  protected static void setUpMetadataToCheck() throws Exception {
     final Statement stmt = connection.createStatement();
 
     ResultSet util;
@@ -346,7 +353,7 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
 
   @AfterClass
   public static void tearDownConnection() throws SQLException {
-    final ResultSet util =
+    ResultSet util =
         connection.createStatement().executeQuery( "DROP VIEW " + VIEW_NAME + "" );
     assertTrue( util.next() );
     assertTrue( "Error dropping temporary test-columns view " + VIEW_NAME + ": "
@@ -960,7 +967,7 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
 
   @Test
   public void test_COLUMN_SIZE_hasRightValue_mdrOptBOOLEAN() throws SQLException {
-    assertThat( getIntOrNull( mdrOptBOOLEAN, "COLUMN_SIZE" ), nullValue() );
+    assertThat( getIntOrNull( mdrOptBOOLEAN, "COLUMN_SIZE" ), equalTo(1) );
   }
 
   @Ignore( "TODO(DRILL-2470): unignore when TINYINT is implemented" )
@@ -1020,7 +1027,7 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
 
   @Test
   public void test_COLUMN_SIZE_hasRightValue_mdrOptVARCHAR() throws SQLException {
-    assertThat(getIntOrNull(mdrOptVARCHAR, "COLUMN_SIZE"), equalTo(65536));
+    assertThat(getIntOrNull(mdrOptVARCHAR, "COLUMN_SIZE"), equalTo(org.apache.drill.common.types.Types.MAX_VARCHAR_LENGTH));
   }
 
   @Test
@@ -2164,7 +2171,7 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
   @Test
   public void test_CHAR_OCTET_LENGTH_hasRightValue_mdrOptVARCHAR() throws SQLException {
     assertThat( getIntOrNull( mdrOptVARCHAR, "CHAR_OCTET_LENGTH" ),
-        equalTo(65536 /* chars. (default of 65536) */
+        equalTo(org.apache.drill.common.types.Types.MAX_VARCHAR_LENGTH /* chars. (default of 65535) */
                          * 4  /* max. UTF-8 bytes per char. */ ) );
   }
 
@@ -2702,7 +2709,7 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
 
   @Test
   public void test_SOURCE_DATA_TYPE_hasRightValue_mdrOptBOOLEAN() throws SQLException {
-    assertThat( getIntOrNull( mdrOptBOOLEAN, "SOURCE_DATA_TYPE" ), nullValue() );
+    assertThat( mdrOptBOOLEAN.getString( "SOURCE_DATA_TYPE" ), nullValue() );
   }
 
   @Test
@@ -2712,22 +2719,18 @@ public class DatabaseMetaDataGetColumnsTest extends JdbcTestBase {
 
   @Test
   public void test_SOURCE_DATA_TYPE_hasRightTypeString() throws SQLException {
-    // TODO(DRILL-2135):  Resolve workaround:
-    //assertThat( rsMetadata.getColumnTypeName( 22 ), equalTo( "SMALLINT" ) );
-    assertThat( rowsMetadata.getColumnTypeName( 22 ), equalTo( "INTEGER" ) );
+    assertThat( rowsMetadata.getColumnTypeName( 22 ), equalTo( "SMALLINT" ) );
   }
 
   @Test
   public void test_SOURCE_DATA_TYPE_hasRightTypeCode() throws SQLException {
-    // TODO(DRILL-2135):  Resolve workaround:
-    //assertThat( rsMetadata.getColumnType( 22 ), equalTo( Types.SMALLINT ) );
-    assertThat( rowsMetadata.getColumnType( 22 ), equalTo( Types.INTEGER ) );
+    assertThat( rowsMetadata.getColumnType( 22 ), equalTo( Types.SMALLINT ) );
   }
 
   @Test
   public void test_SOURCE_DATA_TYPE_hasRightClass() throws SQLException {
     assertThat( rowsMetadata.getColumnClassName( 22 ),
-                equalTo( Integer.class.getName() ) );
+                equalTo( Short.class.getName() ) );
   }
 
   @Test

@@ -30,16 +30,16 @@ import java.util.List;
 
 import org.apache.drill.BaseTestQuery;
 import org.apache.drill.QueryTestUtil;
+import org.apache.drill.categories.UnlikelyTest;
 import org.apache.drill.exec.ExecConstants;
-import org.apache.drill.exec.compile.ClassTransformer;
-import org.apache.drill.exec.compile.CodeCompiler;
 import org.apache.drill.exec.compile.ClassTransformer.ScalarReplacementOption;
+import org.apache.drill.exec.compile.CodeCompiler;
 import org.apache.drill.exec.expr.fn.impl.DateUtility;
 import org.apache.drill.exec.proto.UserBitShared.QueryType;
 import org.apache.drill.exec.record.RecordBatchLoader;
 import org.apache.drill.exec.rpc.RpcException;
 import org.apache.drill.exec.rpc.user.QueryDataBatch;
-import org.apache.drill.exec.rpc.user.UserServer;
+import org.apache.drill.exec.rpc.UserClientConnection;
 import org.apache.drill.exec.server.DrillbitContext;
 import org.apache.drill.exec.server.options.OptionValue;
 import org.apache.drill.exec.util.ByteBufUtil.HadoopWritables;
@@ -56,7 +56,9 @@ import com.google.common.io.Resources;
 
 import io.netty.buffer.DrillBuf;
 import mockit.Injectable;
+import org.junit.experimental.categories.Category;
 
+@Category(UnlikelyTest.class)
 public class TestConvertFunctions extends BaseTestQuery {
 //  private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(TestConvertFunctions.class);
 
@@ -120,7 +122,7 @@ public class TestConvertFunctions extends BaseTestQuery {
           .run();
     } finally {
       // restore the system option
-      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption);
+      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption.string_val);
       test("alter session set `planner.slice_target` = " + ExecConstants.SLICE_TARGET_DEFAULT);
     }
   }
@@ -485,31 +487,31 @@ public class TestConvertFunctions extends BaseTestQuery {
 
   @Test
   public void testFloats5(@Injectable final DrillbitContext bitContext,
-                           @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                           @Injectable UserClientConnection connection) throws Throwable {
     verifyPhysicalPlan("convert_from(convert_to(cast(77 as float8), 'DOUBLE'), 'DOUBLE')", 77.0);
   }
 
   @Test
   public void testFloats5be(@Injectable final DrillbitContext bitContext,
-                          @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                          @Injectable UserClientConnection connection) throws Throwable {
     verifyPhysicalPlan("convert_from(convert_to(cast(77 as float8), 'DOUBLE_BE'), 'DOUBLE_BE')", 77.0);
   }
 
   @Test
   public void testFloats6(@Injectable final DrillbitContext bitContext,
-                           @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                           @Injectable UserClientConnection connection) throws Throwable {
     verifyPhysicalPlan("convert_to(cast(77 as float8), 'DOUBLE')", new byte[] {0, 0, 0, 0, 0, 64, 83, 64});
   }
 
   @Test
   public void testFloats7(@Injectable final DrillbitContext bitContext,
-                           @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                           @Injectable UserClientConnection connection) throws Throwable {
     verifyPhysicalPlan("convert_to(4.9e-324, 'DOUBLE')", new byte[] {1, 0, 0, 0, 0, 0, 0, 0});
   }
 
   @Test
   public void testFloats8(@Injectable final DrillbitContext bitContext,
-                           @Injectable UserServer.UserClientConnection connection) throws Throwable {
+                           @Injectable UserClientConnection connection) throws Throwable {
     verifyPhysicalPlan("convert_to(1.7976931348623157e+308, 'DOUBLE')", new byte[] {-1, -1, -1, -1, -1, -1, -17, 127});
   }
 
@@ -548,7 +550,7 @@ public class TestConvertFunctions extends BaseTestQuery {
       testBigIntVarCharReturnTripConvertLogical();
     } finally {
       // restore the system option
-      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption);
+      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption.string_val);
     }
   }
 
@@ -565,7 +567,7 @@ public class TestConvertFunctions extends BaseTestQuery {
     } catch(RpcException e) {
       caughtException = true;
     } finally {
-      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption);
+      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption.string_val);
     }
 
     // Yes: sometimes this works, sometimes it does not...
@@ -580,7 +582,7 @@ public class TestConvertFunctions extends BaseTestQuery {
       testBigIntVarCharReturnTripConvertLogical();
     } finally {
       // restore the system option
-      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption);
+      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption.string_val);
     }
   }
 
@@ -588,6 +590,7 @@ public class TestConvertFunctions extends BaseTestQuery {
   public void testHadooopVInt() throws Exception {
     final int _0 = 0;
     final int _9 = 9;
+    @SuppressWarnings("resource")
     final DrillBuf buffer = getAllocator().buffer(_9);
 
     long longVal = 0;
@@ -650,7 +653,7 @@ public class TestConvertFunctions extends BaseTestQuery {
 
     } finally {
       // restore the system option
-      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption);
+      QueryTestUtil.restoreScalarReplacementOption(bits[0], srOption.string_val);
     }
   }
 
@@ -677,6 +680,7 @@ public class TestConvertFunctions extends BaseTestQuery {
     for(QueryDataBatch result : resultList) {
       if (result.getData() != null) {
         loader.load(result.getHeader().getDef(), result.getData());
+        @SuppressWarnings("resource")
         ValueVector v = loader.iterator().next().getValueVector();
         for (int j = 0; j < v.getAccessor().getValueCount(); j++) {
           if  (v instanceof VarCharVector) {

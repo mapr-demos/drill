@@ -29,8 +29,8 @@ import org.apache.drill.exec.ops.OperatorContext;
 import org.apache.drill.exec.physical.impl.OutputMutator;
 import org.apache.drill.exec.record.MaterializedField;
 import org.apache.drill.exec.store.AbstractRecordReader;
-import org.apache.drill.exec.store.mock.MockGroupScanPOP.MockColumn;
-import org.apache.drill.exec.store.mock.MockGroupScanPOP.MockScanEntry;
+import org.apache.drill.exec.store.mock.MockTableDef.MockColumn;
+import org.apache.drill.exec.store.mock.MockTableDef.MockScanEntry;
 import org.apache.drill.exec.vector.AllocationHelper;
 import org.apache.drill.exec.vector.ValueVector;
 
@@ -51,6 +51,10 @@ public class MockRecordReader extends AbstractRecordReader {
   }
 
   private int getEstimatedRecordSize(MockColumn[] types) {
+    if (types == null) {
+      return 0;
+    }
+
     int x = 0;
     for (int i = 0; i < types.length; i++) {
       x += TypeHelper.getSize(types[i].getMajorType());
@@ -68,6 +72,9 @@ public class MockRecordReader extends AbstractRecordReader {
   public void setup(OperatorContext context, OutputMutator output) throws ExecutionSetupException {
     try {
       final int estimateRowSize = getEstimatedRecordSize(config.getTypes());
+      if (config.getTypes() == null) {
+        return;
+      }
       valueVectors = new ValueVector[config.getTypes().length];
       batchRecordCount = 250000 / estimateRowSize;
 
@@ -90,6 +97,11 @@ public class MockRecordReader extends AbstractRecordReader {
 
     final int recordSetSize = Math.min(batchRecordCount, this.config.getRecords() - recordsRead);
     recordsRead += recordSetSize;
+
+    if (valueVectors == null) {
+      return recordSetSize;
+    }
+
     for (final ValueVector v : valueVectors) {
       final ValueVector.Mutator m = v.getMutator();
       m.generateTestData(recordSetSize);
