@@ -36,6 +36,8 @@ import org.apache.drill.exec.physical.base.ScanStats;
 import org.apache.drill.exec.proto.CoordinationProtos.DrillbitEndpoint;
 import org.apache.drill.exec.store.StoragePluginRegistry;
 import org.apache.drill.exec.store.openTSDB.OpenTSDBSubScan.OpenTSDBSubScanSpec;
+import org.apache.drill.exec.store.openTSDB.client.services.ServiceImpl;
+import org.apache.drill.exec.store.openTSDB.dto.MetricDTO;
 import org.apache.drill.exec.store.schedule.AffinityCreator;
 import org.apache.drill.exec.store.schedule.AssignmentCreator;
 import org.apache.drill.exec.store.schedule.CompleteWork;
@@ -47,6 +49,10 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Map;
 import java.util.Objects;
+import java.util.Set;
+
+import static jdk.nashorn.internal.ir.debug.ObjectSizeCalculator.getObjectSize;
+import static org.apache.drill.exec.store.openTSDB.Util.parseFromRowData;
 
 @JsonTypeName("openTSDB-scan")
 public class OpenTSDBGroupScan extends AbstractGroupScan {
@@ -132,9 +138,16 @@ public class OpenTSDBGroupScan extends AbstractGroupScan {
 
   @Override
   public ScanStats getScanStats() {
-    //magic number ?
-    long recordCount = 100000L * openTSDBWorkList.size();
-    return new ScanStats(ScanStats.GroupScanProperty.NO_EXACT_ROW_COUNT, recordCount, 1, recordCount);
+    ServiceImpl client = storagePlugin.getClient();
+    Map<String, String> params = parseFromRowData(openTSDBScanSpec.getTableName());
+    Set<MetricDTO> allMetrics = client.getAllMetrics(params);
+    long numMetrics = allMetrics.size();
+    float approxDiskCost = 0;
+    if (numMetrics != 0) {
+      MetricDTO metricDTO  = allMetrics.iterator().next();
+      approxDiskCost = getObjectSize(metricDTO) * numMetrics;
+    }
+    return new ScanStats(ScanStats.GroupScanProperty.EXACT_ROW_COUNT, numMetrics, 1, approxDiskCost);
   }
 
   @Override
