@@ -17,7 +17,6 @@
  */
 package org.apache.drill.exec.store.openTSDB.schema;
 
-import com.google.common.collect.Maps;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
@@ -36,7 +35,6 @@ import org.slf4j.LoggerFactory;
 
 import java.io.IOException;
 import java.util.Collections;
-import java.util.Map;
 import java.util.Set;
 
 public class OpenTSDBSchemaFactory implements SchemaFactory {
@@ -58,20 +56,9 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
   }
 
   class OpenTSDBSchema extends AbstractSchema {
-    private final Map<String, OpenTSDBDatabaseSchema> schemaMap = Maps.newHashMap();
 
     OpenTSDBSchema(String name) {
       super(Collections.<String>emptyList(), name);
-    }
-
-    @Override
-    public AbstractSchema getSubSchema(String name) {
-      Set<String> tables;
-      if (!schemaMap.containsKey(name)) {
-        tables = plugin.getClient().getAllMetricNames();
-        schemaMap.put(name, new OpenTSDBDatabaseSchema(tables, this, name));
-      }
-      return schemaMap.get(name);
     }
 
     @Override
