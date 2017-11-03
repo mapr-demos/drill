@@ -20,8 +20,6 @@ package org.apache.drill.exec.store.openTSDB.schema;
 import org.apache.calcite.schema.SchemaPlus;
 import org.apache.calcite.schema.Table;
 import org.apache.drill.common.exceptions.DrillRuntimeException;
-import org.apache.drill.exec.planner.logical.DrillTable;
-import org.apache.drill.exec.planner.logical.DynamicDrillTable;
 import org.apache.drill.exec.store.AbstractSchema;
 import org.apache.drill.exec.store.SchemaConfig;
 import org.apache.drill.exec.store.SchemaFactory;
@@ -67,7 +65,10 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
       try {
         return new DrillOpenTSDBTable(schemaName, plugin, new Schema(plugin.getClient(), name), scanSpec);
       } catch (Exception e) {
-        throw new DrillRuntimeException(String.format("Failure while retrieving openTSDB table %s", name), e);
+        throw new DrillRuntimeException(String.format("Failure while retrieving openTSDB table %s " +
+                "Maybe you use unsupported syntax. Try such syntax " +
+                "FROM openTSDB.`(metric=your_metric, start=your_time, aggregator=your_aggregator)`", name), e);
+
       }
     }
 
@@ -79,11 +80,6 @@ public class OpenTSDBSchemaFactory implements SchemaFactory {
     @Override
     public String getTypeName() {
       return OpenTSDBStoragePluginConfig.NAME;
-    }
-
-    DrillTable getDrillTable(String tableName) {
-      OpenTSDBScanSpec openTSDBScanSpec = new OpenTSDBScanSpec(tableName);
-      return new DynamicDrillTable(plugin, schemaName, null, openTSDBScanSpec);
     }
   }
 }
